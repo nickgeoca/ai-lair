@@ -1,0 +1,17 @@
+# Hermes credentials, conversations, caches, and mutable runtime state.
+/.env
+/data/
+
+# Sensitive inputs and generated outputs.
+/datasets/
+/outbox/
+
+# Disposable project clones are managed by the justfile, not this repository.
+/repos/
+
+# Separate upstream Hermes Git checkout; preserve its history independently.
+/src/
+
+# Local notes and generated images that are not sandbox configuration.
+/devin-ai.md
+/*.png

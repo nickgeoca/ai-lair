@@ -1,0 +1,38 @@
+server {
+    listen 8080;
+    server_name _;
+
+    client_max_body_size 16m;
+    resolver 1.1.1.1 valid=300s ipv6=off;
+    set $openrouter https://openrouter.ai;
+
+    location = /health {
+        access_log off;
+        return 204;
+    }
+
+    location = /api/v1/models {
+        limit_except GET { deny all; }
+        proxy_pass $openrouter/api/v1/models;
+        proxy_ssl_server_name on;
+        proxy_set_header Host openrouter.ai;
+        proxy_set_header Authorization "Bearer ${OPENROUTER_API_KEY}";
+        proxy_set_header Connection "";
+    }
+
+    location = /api/v1/chat/completions {
+        limit_except POST { deny all; }
+        proxy_pass $openrouter/api/v1/chat/completions;
+        proxy_ssl_server_name on;
+        proxy_set_header Host openrouter.ai;
+        proxy_set_header Authorization "Bearer ${OPENROUTER_API_KEY}";
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_request_buffering on;
+        proxy_read_timeout 1800s;
+    }
+
+    location / {
+        return 403;
+    }
+}
