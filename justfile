@@ -102,12 +102,12 @@ _repo-ensure repo_words:
             fi
             echo "reusing disposable clone: $DST"
         else
-            just repo-create "$REPO"
+            just _repo-create "$REPO"
         fi
     done
 
-# create an independent disposable clone of a clean primary checkout
-repo-create repo:
+# internal helper: clone a clean primary checkout when repo-run needs it
+_repo-create repo:
     #!/usr/bin/env bash
     set -euo pipefail
     REPO={{ quote(repo) }}
