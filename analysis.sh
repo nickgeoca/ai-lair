@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Run Hermes with staged datasets and no general Internet route. HERMES_REPO
-# may name one disposable clone to mount writable at /workspace/repo.
+# Run Hermes with staged datasets and no general Internet route. HERMES_REPOS
+# may name selected disposable clones to mount writable under /workspace.
 set -euo pipefail
 
 HERE="$(dirname "$(readlink -f "$0")")"

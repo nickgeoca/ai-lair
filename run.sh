@@ -6,8 +6,8 @@
 #   - rootless podman: an escape lands in an unprivileged user namespace
 #   - own network namespace via pasta; --no-map-gw means the container
 #     cannot reach services bound on the host (127.0.0.1 or gateway addr)
-#   - normal mode mounts only data/, plus one explicitly selected disposable
-#     repository when HERMES_REPO is set; no access to the real $HOME
+#   - normal mode mounts only data/, plus explicitly selected disposable
+#     repositories when HERMES_REPOS is set; no access to the real $HOME
 #   - analysis mode additionally mounts datasets/ read-only and outbox/ writable
 #   - no-new-privileges: nothing inside can gain privileges via setuid
 #
@@ -16,7 +16,7 @@
 #   ./run.sh setup        first-run provider/tool setup
 #   ./run.sh model        change provider/model
 #   ./run.sh bash         shell inside the sandbox
-#   HERMES_REPO=name ./run.sh
+#   HERMES_REPOS="repo1 repo2" ./run.sh
 #   ./analysis.sh         restricted analysis with no general Internet access
 #
 # Local LLM mode (opt-in, weakens host isolation for this run only):
@@ -44,20 +44,33 @@ ENV_ARGS=()
 MOUNT_ARGS=()
 DEVICE_ARGS=()
 
-# A repository is always selected by basename and mounted individually. Never
-# bind-mount repos/ itself: unrelated disposable clones must remain invisible.
-if [ "${HERMES_REPO_REQUIRED:-0}" = "1" ] && [ -z "${HERMES_REPO:-}" ]; then
+# Repositories are selected by basename and mounted individually. Never bind-
+# mount repos/ itself: unrelated disposable clones must remain invisible.
+# HERMES_REPO remains supported for compatibility with older commands.
+REPO_WORDS="${HERMES_REPOS:-${HERMES_REPO:-}}"
+SELECTED_REPOS=()
+[ -n "$REPO_WORDS" ] && read -r -a SELECTED_REPOS <<< "$REPO_WORDS"
+
+if [ "${HERMES_REPO_REQUIRED:-0}" = "1" ] && [ "${#SELECTED_REPOS[@]}" -eq 0 ]; then
   echo "a disposable repository name is required" >&2
   exit 1
 fi
-if [ -n "${HERMES_REPO:-}" ]; then
-  case "$HERMES_REPO" in
+
+declare -A SEEN_REPOS=()
+for REPO_NAME in "${SELECTED_REPOS[@]}"; do
+  case "$REPO_NAME" in
     .|..|*[!A-Za-z0-9._-]*)
       echo "invalid repository name (allowed: A-Z, a-z, 0-9, ., _, -; not . or ..)" >&2
       exit 1
       ;;
   esac
-  REPO="$REPOS/$HERMES_REPO"
+  if [ -n "${SEEN_REPOS[$REPO_NAME]:-}" ]; then
+    echo "duplicate repository name: $REPO_NAME" >&2
+    exit 1
+  fi
+  SEEN_REPOS[$REPO_NAME]=1
+
+  REPO="$REPOS/$REPO_NAME"
   if [ ! -d "$REPO" ] || [ -L "$REPO" ]; then
     echo "missing disposable repository: $REPO" >&2
     exit 1
@@ -67,10 +80,16 @@ if [ -n "${HERMES_REPO:-}" ]; then
     echo "not a Git repository: $REPO" >&2
     exit 1
   fi
+
+  if [ "${#SELECTED_REPOS[@]}" -eq 1 ]; then
+    REPO_DEST=/workspace/repo
+  else
+    REPO_DEST="/workspace/repos/$REPO_NAME"
+  fi
   MOUNT_ARGS+=(
-    -v "$REPO:/workspace/repo:rw"
+    -v "$REPO:$REPO_DEST:rw"
   )
-fi
+done
 
 # Default: host services unreachable. HERMES_LOCAL_LLM=1 re-enables the
 # gateway mapping so Hermes can call a local model server on the host.

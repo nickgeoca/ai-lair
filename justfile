@@ -16,17 +16,29 @@ model:
 shell:
     ./run.sh bash
 
-# normal Internet-capable mode with exactly one disposable repository writable
-repo-run repo:
-    HERMES_REPO_REQUIRED=1 HERMES_REPO={{ quote(repo) }} ./run.sh
+# normal mode with one or more selected repos; missing clones are created
+repo-run +repos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO_WORDS={{ quote(repos) }}
+    just _repo-ensure "$REPO_WORDS"
+    HERMES_REPO_REQUIRED=1 HERMES_REPOS="$REPO_WORDS" ./run.sh
 
-# restricted analysis, optionally with one repo: `just analysis sdk-rec`
-analysis repo="":
-    HERMES_REPO={{ quote(repo) }} ./analysis.sh
+# restricted analysis with zero or more selected repos
+analysis *repos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO_WORDS={{ quote(repos) }}
+    [ -z "$REPO_WORDS" ] || just _repo-ensure "$REPO_WORDS"
+    HERMES_REPOS="$REPO_WORDS" ./analysis.sh
 
-# restricted shell, optionally with one repo: `just analysis-shell sdk-rec`
-analysis-shell repo="":
-    HERMES_REPO={{ quote(repo) }} ./analysis.sh bash
+# restricted shell with zero or more selected repos
+analysis-shell *repos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO_WORDS={{ quote(repos) }}
+    [ -z "$REPO_WORDS" ] || just _repo-ensure "$REPO_WORDS"
+    HERMES_REPOS="$REPO_WORDS" ./analysis.sh bash
 
 # verify that analysis mode can reach only the fixed LLM gateway
 analysis-check:
@@ -68,20 +80,54 @@ _sandbox cmd:
         ./run.sh bash -c "$CMD"
     fi
 
-# create an independent, disposable clone with no remote
+# internal helper: validate/reuse selected clones and create missing ones
+_repo-ensure repo_words:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO_WORDS={{ quote(repo_words) }}
+    read -r -a REPOS <<< "$REPO_WORDS"
+    for REPO in "${REPOS[@]}"; do
+        case "$REPO" in
+            .|..|*[!A-Za-z0-9._-]*)
+                echo "invalid repository name: $REPO" >&2
+                exit 1
+                ;;
+        esac
+        DST="$PWD/repos/$REPO"
+        if [ -e "$DST" ]; then
+            TOP="$(git -C "$DST" rev-parse --show-toplevel 2>/dev/null || true)"
+            if [ ! -d "$DST" ] || [ -L "$DST" ] || [ -z "$TOP" ] || [ "$(readlink -f "$TOP")" != "$(readlink -f "$DST")" ]; then
+                echo "refusing invalid disposable repository: $DST" >&2
+                exit 1
+            fi
+            echo "reusing disposable clone: $DST"
+        else
+            just repo-create "$REPO"
+        fi
+    done
+
+# create an independent disposable clone of a clean primary checkout
 repo-create repo:
     #!/usr/bin/env bash
     set -euo pipefail
     REPO={{ quote(repo) }}
     case "$REPO" in
-        ""|*[!A-Za-z0-9._-]*)
+        ""|.|..|*[!A-Za-z0-9._-]*)
             echo "repository name may contain only letters, numbers, ., _, and -" >&2
             exit 1
             ;;
     esac
     SRC="$HOME/projects/$REPO"
     DST="$PWD/repos/$REPO"
-    git -C "$SRC" rev-parse --is-inside-work-tree >/dev/null
+    TOP="$(git -C "$SRC" rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -z "$TOP" ] || [ "$(readlink -f "$TOP")" != "$(readlink -f "$SRC")" ]; then
+        echo "not a primary Git checkout: $SRC" >&2
+        exit 1
+    fi
+    if [ -n "$(git -C "$SRC" status --porcelain)" ]; then
+        echo "primary checkout is dirty; commit or stash its changes first: $SRC" >&2
+        exit 1
+    fi
     if [ -e "$DST" ]; then
         echo "destination already exists: $DST" >&2
         exit 1
@@ -92,13 +138,68 @@ repo-create repo:
     git -C "$DST" tag hermes-base HEAD
     echo "created disposable clone: $DST"
 
+# summarize disposable changes; optionally limit to named repos
+repo-check *repos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REPO_WORDS={{ quote(repos) }}
+    REPOS=()
+    if [ -n "$REPO_WORDS" ]; then
+        read -r -a REPOS <<< "$REPO_WORDS"
+    else
+        shopt -s nullglob
+        for PATHNAME in "$PWD"/repos/*; do
+            [ -d "$PATHNAME" ] && REPOS+=("${PATHNAME##*/}")
+        done
+    fi
+    if [ "${#REPOS[@]}" -eq 0 ]; then
+        echo "no disposable repositories"
+        exit 0
+    fi
+    for REPO in "${REPOS[@]}"; do
+        case "$REPO" in
+            .|..|*[!A-Za-z0-9._-]*)
+                echo "invalid repository name: $REPO" >&2
+                exit 1
+                ;;
+        esac
+        CLONE="$PWD/repos/$REPO"
+        PRIMARY="$HOME/projects/$REPO"
+        TOP="$(git -C "$CLONE" rev-parse --show-toplevel 2>/dev/null || true)"
+        if [ -z "$TOP" ] || [ "$(readlink -f "$TOP")" != "$(readlink -f "$CLONE")" ]; then
+            echo "missing or invalid disposable repository: $CLONE" >&2
+            exit 1
+        fi
+        if ! git -C "$CLONE" rev-parse --verify 'hermes-base^{commit}' >/dev/null 2>&1; then
+            echo "missing hermes-base tag: $CLONE" >&2
+            exit 1
+        fi
+        echo
+        echo "== $REPO =="
+        echo "Working tree:"
+        STATUS="$(git -C "$CLONE" status --short)"
+        [ -n "$STATUS" ] && printf '%s\n' "$STATUS" || echo "  clean"
+        echo "Files changed since clone creation:"
+        CHANGED="$(git -C "$CLONE" diff --name-status hermes-base)"
+        [ -n "$CHANGED" ] && printf '%s\n' "$CHANGED" || echo "  none"
+        echo "Commits created in disposable clone:"
+        COMMITS="$(git -C "$CLONE" log --oneline hermes-base..HEAD)"
+        [ -n "$COMMITS" ] && printf '%s\n' "$COMMITS" || echo "  none"
+        if git -C "$PRIMARY" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+            BASE="$(git -C "$CLONE" rev-parse hermes-base)"
+            PRIMARY_AHEAD="$(git -C "$PRIMARY" rev-list --count "$BASE"..HEAD 2>/dev/null || echo unknown)"
+            CLONE_AHEAD="$(git -C "$CLONE" rev-list --count hermes-base..HEAD)"
+            echo "Commits since shared base: primary=$PRIMARY_AHEAD disposable=$CLONE_AHEAD"
+        fi
+    done
+
 # delete a disposable clone after an explicit confirmation
 repo-remove repo:
     #!/usr/bin/env bash
     set -euo pipefail
     REPO={{ quote(repo) }}
     case "$REPO" in
-        ""|*[!A-Za-z0-9._-]*)
+        ""|.|..|*[!A-Za-z0-9._-]*)
             echo "invalid repository name" >&2
             exit 1
             ;;
@@ -122,7 +223,7 @@ repo-import repo commit="HEAD":
     REPO={{ quote(repo) }}
     COMMIT={{ quote(commit) }}
     case "$REPO" in
-        ""|*[!A-Za-z0-9._-]*)
+        ""|.|..|*[!A-Za-z0-9._-]*)
             echo "invalid repository name" >&2
             exit 1
             ;;
