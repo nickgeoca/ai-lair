@@ -33,12 +33,18 @@ With one selected repository, Hermes sees it at:
 /workspace/repo
 ```
 
+Hermes starts in that directory, so file search and terminal tools immediately
+operate on the selected repository.
+
 With multiple selected repositories, Hermes sees only those repositories at:
 
 ```text
 /workspace/repos/sdk-rec
 /workspace/repos/habbit-track
 ```
+
+Hermes starts in `/workspace/repos`, so both selected repositories are visible
+to workspace-scoped tools.
 
 The `repos/` parent directory itself is never mounted.
 

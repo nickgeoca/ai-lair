@@ -43,6 +43,7 @@ ENV_ARGS=()
 [ -f "$HERE/.env" ] && ENV_ARGS=(--env-file "$HERE/.env")
 MOUNT_ARGS=()
 DEVICE_ARGS=()
+WORKDIR_ARGS=()
 
 # Repositories are selected by basename and mounted individually. Never bind-
 # mount repos/ itself: unrelated disposable clones must remain invisible.
@@ -91,6 +92,15 @@ for REPO_NAME in "${SELECTED_REPOS[@]}"; do
   )
 done
 
+# Start interactive tools where the selected projects are visible. The image's
+# launcher explicitly preserves Podman's working-directory override. Only
+# container paths are used here; the host repos/ parent is still never mounted.
+if [ "${#SELECTED_REPOS[@]}" -eq 1 ]; then
+  WORKDIR_ARGS=(--workdir /workspace/repo)
+elif [ "${#SELECTED_REPOS[@]}" -gt 1 ]; then
+  WORKDIR_ARGS=(--workdir /workspace/repos)
+fi
+
 # Default: host services unreachable. HERMES_LOCAL_LLM=1 re-enables the
 # gateway mapping so Hermes can call a local model server on the host.
 NET_ARGS=(--network=pasta:--no-map-gw)
@@ -123,6 +133,7 @@ exec podman run -it --rm \
   --name "$CONTAINER_NAME" \
   "${ENV_ARGS[@]}" \
   "${NET_ARGS[@]}" \
+  "${WORKDIR_ARGS[@]}" \
   --userns=keep-id:uid=10000,gid=10000 \
   --security-opt=no-new-privileges \
   --pids-limit=2048 \
