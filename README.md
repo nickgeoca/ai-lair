@@ -44,7 +44,9 @@ With multiple selected repositories, Hermes sees only those repositories at:
 ```
 
 Hermes starts in `/workspace/repos`, so both selected repositories are visible
-to workspace-scoped tools.
+to workspace-scoped tools. A read-only `AGENTS.md` at that container-only
+workspace root tells Hermes to enumerate the selected child repositories before
+claiming that one is missing.
 
 The `repos/` parent directory itself is never mounted.
 

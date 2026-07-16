@@ -35,6 +35,7 @@ DATA="$HERE/data"
 DATASETS="$HERE/datasets"
 OUTBOX="$HERE/outbox"
 REPOS="$HERE/repos"
+WORKSPACE_INSTRUCTIONS="$HERE/workspace/AGENTS.md"
 
 # Optional: a .env file next to this script (chmod 600) is passed into the
 # container, e.g. OPENROUTER_API_KEY=sk-or-...  Keys entered in `setup`
@@ -98,7 +99,16 @@ done
 if [ "${#SELECTED_REPOS[@]}" -eq 1 ]; then
   WORKDIR_ARGS=(--workdir /workspace/repo)
 elif [ "${#SELECTED_REPOS[@]}" -gt 1 ]; then
+  if [ ! -f "$WORKSPACE_INSTRUCTIONS" ]; then
+    echo "missing multi-repository workspace instructions: $WORKSPACE_INSTRUCTIONS" >&2
+    exit 1
+  fi
   WORKDIR_ARGS=(--workdir /workspace/repos)
+  # A file-only mount marks the non-Git parent as a coding workspace and tells
+  # Hermes to discover its selected child repos. No host directory is exposed.
+  MOUNT_ARGS+=(
+    -v "$WORKSPACE_INSTRUCTIONS:/workspace/repos/AGENTS.md:ro"
+  )
 fi
 
 # Default: host services unreachable. HERMES_LOCAL_LLM=1 re-enables the
