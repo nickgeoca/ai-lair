@@ -2,7 +2,7 @@
 
 # start the interactive chat TUI
 run:
-    ./run.sh
+    ./run.sh --tui
 
 # first-run wizard: pick provider (OpenRouter), paste API key, choose model
 setup:
@@ -11,6 +11,127 @@ setup:
 # switch provider/model later
 model:
     ./run.sh model
+
+# discover and change common Hermes settings for the default profile
+options:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Hermes options (default profile)"
+    echo "1) Show delegation settings"
+    echo "2) Delegation: flat (5 parallel leaf agents, 30 iterations)"
+    echo "3) Delegation: default (3 parallel leaf agents, 50 iterations)"
+    echo "4) Select default provider/model"
+    echo "5) Show full Hermes configuration"
+    read -r -p "Select [1-5]: " CHOICE
+    case "$CHOICE" in
+        1) just delegation-show ;;
+        2) just delegation flat ;;
+        3) just delegation default ;;
+        4) ./run.sh model ;;
+        5) just _sandbox "hermes config show" ;;
+        *)
+            echo "invalid selection: $CHOICE" >&2
+            exit 2
+            ;;
+    esac
+
+# choose a model before launch; DeepSeek presets stay pinned to Novita FP8
+pick-run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "1) DeepSeek V4 Flash (default) — OpenRouter / Novita FP8"
+    echo "2) DeepSeek V4 Pro — OpenRouter / Novita FP8"
+    echo "3) Kimi K3 — OpenRouter / Moonshot AI"
+    echo "4) Hermes provider/model picker (changes saved default)"
+    read -r -p "Select [1-4]: " CHOICE
+    case "$CHOICE" in
+        1)
+            MODEL=deepseek/deepseek-v4-flash
+            ROUTE=novita/fp8
+            ;;
+        2)
+            MODEL=deepseek/deepseek-v4-pro
+            ROUTE=novita/fp8
+            ;;
+        3)
+            MODEL=moonshotai/kimi-k3
+            ROUTE=moonshotai
+            RESTORE_ROUTE=novita/fp8
+            ;;
+        4)
+            ./run.sh model
+            exec ./run.sh --tui
+            ;;
+        *)
+            echo "invalid selection: $CHOICE" >&2
+            exit 2
+            ;;
+    esac
+    just _sandbox "hermes config set provider_routing.only.0 $ROUTE"
+    if [ -n "${RESTORE_ROUTE:-}" ]; then
+        trap 'just _sandbox "hermes config set provider_routing.only.0 novita/fp8"' EXIT
+        ./run.sh --tui --model "$MODEL" --provider openrouter
+        exit
+    fi
+    exec ./run.sh --tui --model "$MODEL" --provider openrouter
+
+# create an isolated Hermes profile for a parallel container (run once)
+parallel-setup profile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PROFILE={{ quote(profile) }}
+    if [[ ! "$PROFILE" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+        echo "invalid profile name: $PROFILE" >&2
+        exit 2
+    fi
+    just _sandbox "hermes profile create $PROFILE --clone"
+
+# choose a model and launch an isolated Hermes container/profile in parallel
+parallel-pick profile:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PROFILE={{ quote(profile) }}
+    if [[ ! "$PROFILE" =~ ^[a-z0-9][a-z0-9_-]{0,63}$ ]]; then
+        echo "invalid profile name: $PROFILE" >&2
+        exit 2
+    fi
+    CONTAINER_NAME="hermes-$PROFILE"
+    echo "Parallel profile: $PROFILE"
+    echo "1) DeepSeek V4 Flash — OpenRouter / Novita FP8"
+    echo "2) DeepSeek V4 Pro — OpenRouter / Novita FP8"
+    echo "3) Kimi K3 — OpenRouter / Moonshot AI"
+    echo "4) Hermes provider/model picker (changes this profile's saved default)"
+    read -r -p "Select [1-4]: " CHOICE
+    case "$CHOICE" in
+        1)
+            MODEL=deepseek/deepseek-v4-flash
+            ROUTE=novita/fp8
+            ;;
+        2)
+            MODEL=deepseek/deepseek-v4-pro
+            ROUTE=novita/fp8
+            ;;
+        3)
+            MODEL=moonshotai/kimi-k3
+            ROUTE=moonshotai
+            ;;
+        4)
+            HERMES_CONTAINER_NAME="$CONTAINER_NAME" ./run.sh --profile "$PROFILE" model
+            exec env HERMES_CONTAINER_NAME="$CONTAINER_NAME" ./run.sh --profile "$PROFILE" --tui
+            ;;
+        *)
+            echo "invalid selection: $CHOICE" >&2
+            exit 2
+            ;;
+    esac
+    HERMES_CONTAINER_NAME="$CONTAINER_NAME" ./run.sh --profile "$PROFILE" \
+        config set provider_routing.only.0 "$ROUTE"
+    exec env HERMES_CONTAINER_NAME="$CONTAINER_NAME" ./run.sh \
+        --profile "$PROFILE" --tui --model "$MODEL" --provider openrouter
+
+# force the modern terminal UI for the configured default model
+tui:
+    ./run.sh --tui
 
 # shell inside the sandbox to poke around
 shell:
@@ -22,7 +143,7 @@ repo-run +repos:
     set -euo pipefail
     REPO_WORDS={{ quote(repos) }}
     just _repo-ensure "$REPO_WORDS"
-    HERMES_REPO_REQUIRED=1 HERMES_REPOS="$REPO_WORDS" ./run.sh
+    HERMES_REPO_REQUIRED=1 HERMES_REPOS="$REPO_WORDS" ./run.sh --tui
 
 # restricted analysis with zero or more selected repos
 analysis *repos:
