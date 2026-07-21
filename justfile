@@ -1,8 +1,36 @@
 # Hermes Agent in the rootless podman sandbox (see run.sh for details)
 
-# start the interactive chat TUI
+set positional-arguments
+
+# claim the first available slot and start an interactive Hermes TUI
 run:
-    ./run.sh --tui
+    ./slot-run.sh run
+
+# set the maximum parallel slot count, or show slot status when omitted
+slots count="":
+    ./slot-run.sh slots {{ quote(count) }}
+
+# show active, reserved, stopped, and free Hermes slots
+status:
+    ./slot-run.sh status
+
+# run with selected disposable repository clones and normal Internet access
+run-repo +repos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exec ./slot-run.sh repo "$@"
+
+# run with selected files/directories mounted read-only and normal Internet
+run-data +paths:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exec ./slot-run.sh data "$@"
+
+# review and import new commits from disposable clones into current branches
+get-repo +repos:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    exec ./get-repo.sh "$@"
 
 # first-run wizard: pick provider (OpenRouter), paste API key, choose model
 setup:
@@ -16,26 +44,34 @@ model:
 options:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Hermes options (default profile)"
-    echo "1) Show delegation settings"
-    echo "2) Delegation: flat (5 parallel leaf agents, 30 iterations)"
-    echo "3) Delegation: default (3 parallel leaf agents, 50 iterations)"
-    echo "4) Select default provider/model"
-    echo "5) Show full Hermes configuration"
-    read -r -p "Select [1-5]: " CHOICE
+    echo "Hermes options"
+    echo "1) Show slot status and maximum"
+    echo "2) Set maximum parallel slots"
+    echo "3) Show delegation settings (default profile)"
+    echo "4) Delegation: flat (5 parallel leaf agents, 30 iterations)"
+    echo "5) Delegation: default (3 parallel leaf agents, 50 iterations)"
+    echo "6) Select default provider/model"
+    echo "7) Show full Hermes configuration"
+    read -r -p "Select [1-7]: " CHOICE
     case "$CHOICE" in
-        1) just delegation-show ;;
-        2) just delegation flat ;;
-        3) just delegation default ;;
-        4) ./run.sh model ;;
-        5) just _sandbox "hermes config show" ;;
+        1) just status ;;
+        2)
+            read -r -p "Maximum slots [1-16]: " COUNT
+            just slots "$COUNT"
+            ;;
+        3) just delegation-show ;;
+        4) just delegation flat ;;
+        5) just delegation default ;;
+        6) ./run.sh model ;;
+        7) just _sandbox "hermes config show" ;;
         *)
             echo "invalid selection: $CHOICE" >&2
             exit 2
             ;;
     esac
 
-# choose a model before launch; DeepSeek presets stay pinned to Novita FP8
+# legacy single-profile model menu
+[private]
 pick-run:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -75,7 +111,8 @@ pick-run:
     fi
     exec ./run.sh --tui --model "$MODEL" --provider openrouter
 
-# create an isolated Hermes profile for a parallel container (run once)
+# legacy manual parallel-profile setup
+[private]
 parallel-setup profile:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -86,7 +123,8 @@ parallel-setup profile:
     fi
     just _sandbox "hermes profile create $PROFILE --clone"
 
-# choose a model and launch an isolated Hermes container/profile in parallel
+# legacy manual parallel-profile launcher
+[private]
 parallel-pick profile:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -130,14 +168,17 @@ parallel-pick profile:
         --profile "$PROFILE" --tui --model "$MODEL" --provider openrouter
 
 # force the modern terminal UI for the configured default model
+[private]
 tui:
     ./run.sh --tui
 
 # shell inside the sandbox to poke around
+[private]
 shell:
     ./run.sh bash
 
 # normal mode with one or more selected repos; missing clones are created
+[private]
 repo-run +repos:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -146,6 +187,7 @@ repo-run +repos:
     HERMES_REPO_REQUIRED=1 HERMES_REPOS="$REPO_WORDS" ./run.sh --tui
 
 # restricted analysis with zero or more selected repos
+[private]
 analysis *repos:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -154,6 +196,7 @@ analysis *repos:
     HERMES_REPOS="$REPO_WORDS" ./analysis.sh
 
 # restricted shell with zero or more selected repos
+[private]
 analysis-shell *repos:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -162,10 +205,12 @@ analysis-shell *repos:
     HERMES_REPOS="$REPO_WORDS" ./analysis.sh bash
 
 # verify that analysis mode can reach only the fixed LLM gateway
+[private]
 analysis-check:
     ./analysis.sh --check
 
 # apply a delegation profile from profiles/<name>.conf, e.g. `just delegation flat`
+[private]
 delegation profile="flat":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -185,6 +230,7 @@ delegation profile="flat":
     just _sandbox "${cmd}true"
 
 # show the current delegation settings from the sandbox config
+[private]
 delegation-show:
     @just _sandbox "python -c \"import yaml; print(yaml.safe_dump({'delegation': (yaml.safe_load(open('/opt/data/config.yaml')) or {}).get('delegation', '(defaults — nothing overridden)')}, sort_keys=False), end='')\""
 
@@ -260,6 +306,7 @@ _repo-create repo:
     echo "created disposable clone: $DST"
 
 # summarize disposable changes; optionally limit to named repos
+[private]
 repo-check *repos:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -315,6 +362,7 @@ repo-check *repos:
     done
 
 # delete a disposable clone after an explicit confirmation
+[private]
 repo-remove repo:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -338,6 +386,7 @@ repo-remove repo:
     rm -rf -- "$DST"
 
 # fetch one Hermes commit and cherry-pick it into the primary checkout
+[private]
 repo-import repo commit="HEAD":
     #!/usr/bin/env bash
     set -euo pipefail

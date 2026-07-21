@@ -7,7 +7,7 @@
 #   - own network namespace via pasta; --no-map-gw means the container
 #     cannot reach services bound on the host (127.0.0.1 or gateway addr)
 #   - normal mode mounts only data/, plus explicitly selected disposable
-#     repositories when HERMES_REPOS is set; no access to the real $HOME
+#     repositories or read-only data paths; no access to the real $HOME
 #   - analysis mode additionally mounts datasets/ read-only and outbox/ writable
 #   - no-new-privileges: nothing inside can gain privileges via setuid
 #
@@ -17,6 +17,7 @@
 #   ./run.sh model        change provider/model
 #   ./run.sh bash         shell inside the sandbox
 #   HERMES_REPOS="repo1 repo2" ./run.sh
+#   HERMES_DATA_MANIFEST=/path/to/manifest ./run.sh
 #   ./analysis.sh         restricted analysis with no general Internet access
 #
 # Local LLM mode (opt-in, weakens host isolation for this run only):
@@ -93,10 +94,61 @@ for REPO_NAME in "${SELECTED_REPOS[@]}"; do
   )
 done
 
+# Normal Internet-capable data mode mounts only the explicit host paths listed
+# in a newline-delimited manifest. slot-run.sh validates and creates the
+# manifest; run.sh revalidates it so direct callers cannot smuggle malformed
+# mount destinations into Podman. Repositories and data are intentionally not
+# combined yet.
+if [ -n "${HERMES_DATA_MANIFEST:-}" ]; then
+  if [ "${#SELECTED_REPOS[@]}" -gt 0 ]; then
+    echo "repository and data mounts cannot be combined" >&2
+    exit 1
+  fi
+  if [ ! -f "$HERMES_DATA_MANIFEST" ] || [ -L "$HERMES_DATA_MANIFEST" ]; then
+    echo "invalid data manifest: $HERMES_DATA_MANIFEST" >&2
+    exit 1
+  fi
+  declare -A SEEN_DATA_DESTS=()
+  DATA_COUNT=0
+  while IFS= read -r DATA_PATH || [ -n "$DATA_PATH" ]; do
+    [ -n "$DATA_PATH" ] || continue
+    RESOLVED_DATA_PATH="$(realpath -e -- "$DATA_PATH" 2>/dev/null || true)"
+    if [ -z "$RESOLVED_DATA_PATH" ] || { [ ! -f "$RESOLVED_DATA_PATH" ] && [ ! -d "$RESOLVED_DATA_PATH" ]; }; then
+      echo "missing data path: $DATA_PATH" >&2
+      exit 1
+    fi
+    if [[ "$RESOLVED_DATA_PATH" == *:* || "$RESOLVED_DATA_PATH" == *$'\n'* ]]; then
+      echo "unsupported ':' or newline in data path: $DATA_PATH" >&2
+      exit 1
+    fi
+    DATA_NAME="$(basename "$RESOLVED_DATA_PATH")"
+    if [ -n "${SEEN_DATA_DESTS[$DATA_NAME]:-}" ]; then
+      echo "data paths must have unique basenames: $DATA_NAME" >&2
+      exit 1
+    fi
+    SEEN_DATA_DESTS[$DATA_NAME]=1
+    DATA_COUNT=$((DATA_COUNT + 1))
+    MOUNT_ARGS+=(
+      -v "$RESOLVED_DATA_PATH:/workspace/data/$DATA_NAME:ro"
+    )
+  done < "$HERMES_DATA_MANIFEST"
+  if [ "$DATA_COUNT" -eq 0 ]; then
+    echo "data manifest contains no paths: $HERMES_DATA_MANIFEST" >&2
+    exit 1
+  fi
+  [ -d "$OUTBOX" ] || { echo "missing outbox directory: $OUTBOX" >&2; exit 1; }
+  MOUNT_ARGS+=(
+    -v "$OUTBOX:/workspace/outbox:rw"
+  )
+  WORKDIR_ARGS=(--workdir /workspace)
+fi
+
 # Start interactive tools where the selected projects are visible. The image's
 # launcher explicitly preserves Podman's working-directory override. Only
 # container paths are used here; the host repos/ parent is still never mounted.
-if [ "${#SELECTED_REPOS[@]}" -eq 1 ]; then
+if [ -n "${HERMES_DATA_MANIFEST:-}" ]; then
+  : # data mode selected its workdir above
+elif [ "${#SELECTED_REPOS[@]}" -eq 1 ]; then
   WORKDIR_ARGS=(--workdir /workspace/repo)
 elif [ "${#SELECTED_REPOS[@]}" -gt 1 ]; then
   if [ ! -f "$WORKSPACE_INSTRUCTIONS" ]; then
