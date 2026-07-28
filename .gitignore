@@ -48,6 +48,7 @@
 /docs/*
 !/docs/design.md
 !/docs/implementation.md
+!/docs/code-review-capability-profiles.md
 
 !/tests/
 /tests/*
