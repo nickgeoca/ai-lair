@@ -41,3 +41,4 @@
 !/tests/
 /tests/*
 !/tests/local-models.sh
+!/tests/run-safe-roots.sh

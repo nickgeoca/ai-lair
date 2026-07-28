@@ -48,6 +48,10 @@ DEVICE_ARGS=()
 WORKDIR_ARGS=()
 SECRET_ARGS=()
 LABEL_ARGS=()
+# Keep Hermes's dedicated file tools aligned with the writable mounts. The
+# image defaults this to /opt/data, which would reject repository tool writes
+# even though the same paths remain writable through the terminal tool.
+SAFE_WRITE_ROOTS=(/opt/data)
 
 # Repositories are selected by basename and mounted individually. Never bind-
 # mount repos/ itself: unrelated disposable clones must remain invisible.
@@ -94,6 +98,7 @@ for REPO_NAME in "${SELECTED_REPOS[@]}"; do
   MOUNT_ARGS+=(
     -v "$REPO:$REPO_DEST:rw"
   )
+  SAFE_WRITE_ROOTS+=("$REPO_DEST")
 done
 
 # Normal Internet-capable data mode mounts only the explicit host paths listed
@@ -142,6 +147,7 @@ if [ -n "${HERMES_DATA_MANIFEST:-}" ]; then
   MOUNT_ARGS+=(
     -v "$OUTBOX:/workspace/outbox:rw"
   )
+  SAFE_WRITE_ROOTS+=(/workspace/outbox)
   WORKDIR_ARGS=(--workdir /workspace)
 fi
 
@@ -225,8 +231,17 @@ if [ "${HERMES_ANALYSIS:-0}" = "1" ]; then
     -v "$DATASETS:/workspace/data:ro"
     -v "$OUTBOX:/workspace/outbox:rw"
   )
+  SAFE_WRITE_ROOTS+=(/workspace/outbox)
   DEVICE_ARGS=(--device nvidia.com/gpu=all)
 fi
+
+SAFE_WRITE_ROOTS_VALUE="${SAFE_WRITE_ROOTS[0]}"
+for SAFE_WRITE_ROOT in "${SAFE_WRITE_ROOTS[@]:1}"; do
+  SAFE_WRITE_ROOTS_VALUE="$SAFE_WRITE_ROOTS_VALUE:$SAFE_WRITE_ROOT"
+done
+ENV_ARGS+=(
+  -e "HERMES_WRITE_SAFE_ROOT=$SAFE_WRITE_ROOTS_VALUE"
+)
 
 exec podman run -it --rm \
   --name "$CONTAINER_NAME" \

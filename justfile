@@ -26,6 +26,7 @@ local-setup profile:
 test:
     bash -n ./*.sh ./tests/*.sh
     ./tests/local-models.sh
+    ./tests/run-safe-roots.sh
     ./local-models.sh validate
 
 # run with selected disposable repository clones and normal Internet access
