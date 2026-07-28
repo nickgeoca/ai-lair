@@ -2,6 +2,10 @@
 
 set positional-arguments
 
+# list available capability profiles
+capability-profiles:
+    ./profile-read.sh list
+
 # claim the first available slot and start an interactive Hermes TUI
 run:
     ./slot-run.sh run
@@ -22,6 +26,8 @@ local-models:
 local-setup profile:
     ./local-models.sh setup {{ quote(profile) }}
 
+# validate capability profiles (requires jq)
+    ./profile-read.sh validate || true
 # run syntax checks and local-model profile tests without downloading models
 test:
     bash -n ./*.sh ./tests/*.sh

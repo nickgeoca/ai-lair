@@ -288,15 +288,24 @@ elif [ "$MODE" = "data" ]; then
   export HERMES_DATA_MANIFEST="$DATA_MANIFEST"
 fi
 
+# Derive capability profile from mode.  The profile name maps to the
+# profiles/capabilities/<name>.json file and is validated by run.sh.
+PROFILE_ARG=()
+case "$MODE" in
+  repo) PROFILE_ARG=(--profile dev) ;;
+  data) PROFILE_ARG=(--profile data-science) ;;
+  run)  ;;  # no profile for bare shell/chat mode
+esac
+
 if [ -n "$LOCAL_PROFILE" ]; then
   "$HERE/local-models.sh" acquire "$LOCAL_PROFILE" "$CONTAINER_NAME" "$$"
   LOCAL_ACQUIRED=true
   HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
     HERMES_LOCAL_PROFILE="$LOCAL_PROFILE" \
-    "$HERE/run.sh" --tui --model "$MODEL" --provider custom
+    "$HERE/run.sh" --tui "${PROFILE_ARG[@]}" --model "$MODEL" --provider custom
 elif [ "$USE_SAVED_MODEL" = true ]; then
-  HERMES_CONTAINER_NAME="$CONTAINER_NAME" "$HERE/run.sh" --tui
+  HERMES_CONTAINER_NAME="$CONTAINER_NAME" "$HERE/run.sh" --tui "${PROFILE_ARG[@]}"
 else
   HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
-    "$HERE/run.sh" --tui --model "$MODEL" --provider openrouter
+    "$HERE/run.sh" --tui "${PROFILE_ARG[@]}" --model "$MODEL" --provider openrouter
 fi
