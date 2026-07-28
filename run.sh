@@ -17,6 +17,7 @@
 #   ./run.sh model        change provider/model
 #   ./run.sh bash         shell inside the sandbox
 #   HERMES_REPOS="repo1 repo2" ./run.sh
+#   ./run.sh --profile dev    use a capability profile (see profile-read.sh list)
 #   HERMES_DATA_MANIFEST=/path/to/manifest ./run.sh
 #   ./analysis.sh         restricted analysis with no general Internet access
 #
@@ -52,6 +53,63 @@ LABEL_ARGS=()
 # image defaults this to /opt/data, which would reject repository tool writes
 # even though the same paths remain writable through the terminal tool.
 SAFE_WRITE_ROOTS=(/opt/data)
+
+# --profile <name> selects a declarative capability profile.  The profile is
+# validated by profile-read.sh and translated into the internal mode variables
+# that the rest of this script already uses.  When --profile is not set, the
+# existing environment-variable API continues to work unchanged.
+CAPABILITY_PROFILE=""
+PASSTHROUGH_ARGS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --profile)
+      [ "$#" -ge 2 ] || { echo "--profile requires a name" >&2; exit 2; }
+      CAPABILITY_PROFILE="$2"
+      shift 2
+      ;;
+    --profile=*)
+      CAPABILITY_PROFILE="${1#*=}"
+      shift
+      ;;
+    *)
+      PASSTHROUGH_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+set -- "${PASSTHROUGH_ARGS[@]}"
+
+if [ -n "$CAPABILITY_PROFILE" ]; then
+  if ! command -v jq >/dev/null 2>&1; then
+    echo "jq is required for capability profiles" >&2
+    exit 1
+  fi
+  PROFILE_JSON="$("$HERE/profile-read.sh" read "$CAPABILITY_PROFILE")" || exit 1
+
+  PROFILE_NETWORK="$(jq -r '.network' <<<"$PROFILE_JSON")"
+  PROFILE_MODEL_TYPE="$(jq -r '.model.type' <<<"$PROFILE_JSON")"
+
+  case "$PROFILE_NETWORK" in
+    internet)   ;;  # default pasta:--no-map-gw, set below
+    llm-gateway) HERMES_ANALYSIS=1 ;;
+    local-dual)  ;;  # driven by model.local_profile in the local-model block
+    *) echo "internal error: unknown network type '$PROFILE_NETWORK'" >&2; exit 1 ;;
+  esac
+
+  if [ "$PROFILE_MODEL_TYPE" = "local" ]; then
+    HERMES_LOCAL_PROFILE="$(jq -r '.model.local_profile' <<<"$PROFILE_JSON")"
+  fi
+
+  # mounts.datasets implies the analysis-mode dataset + outbox mounts.
+  if jq -e '.mounts.datasets' <<<"$PROFILE_JSON" >/dev/null 2>&1; then
+    HERMES_ANALYSIS=1
+  fi
+
+  # compute.gpu requests NVIDIA device access.
+  if jq -e '.compute.gpu == true' <<<"$PROFILE_JSON" >/dev/null 2>&1; then
+    PROFILE_WANTS_GPU=1
+  fi
+fi
 
 # Repositories are selected by basename and mounted individually. Never bind-
 # mount repos/ itself: unrelated disposable clones must remain invisible.
@@ -242,6 +300,11 @@ done
 ENV_ARGS+=(
   -e "HERMES_WRITE_SAFE_ROOT=$SAFE_WRITE_ROOTS_VALUE"
 )
+
+# Profiles may request GPU without the full analysis-mode restrictions.
+if [ "${PROFILE_WANTS_GPU:-0}" = "1" ] && [ "${#DEVICE_ARGS[@]}" -eq 0 ]; then
+  DEVICE_ARGS=(--device nvidia.com/gpu=all)
+fi
 
 exec podman run -it --rm \
   --name "$CONTAINER_NAME" \
