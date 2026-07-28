@@ -90,8 +90,10 @@ if [ -n "$CAPABILITY_PROFILE" ]; then
   PROFILE_MODEL_TYPE="$(jq -r '.model.type' <<<"$PROFILE_JSON")"
 
   # --- Reject contradictory legacy env vars ---
-  if [ "${HERMES_ANALYSIS:-0}" = "1" ]; then
-    echo "HERMES_ANALYSIS is incompatible with capability profiles; use --capability-profile analysis instead" >&2
+  # HERMES_ANALYSIS is only allowed when the profile's network is llm-gateway
+  # (i.e. it was set by analysis.sh, which orchestrates the gateway).
+  if [ "${HERMES_ANALYSIS:-0}" = "1" ] && [ "$PROFILE_NETWORK" != "llm-gateway" ]; then
+    echo "HERMES_ANALYSIS contradicts capability profile '$CAPABILITY_PROFILE' (network=$PROFILE_NETWORK)" >&2
     exit 1
   fi
   if [ "${HERMES_LOCAL_LLM:-0}" = "1" ] && [ "$PROFILE_MODEL_TYPE" != "local" ]; then
@@ -107,11 +109,14 @@ if [ -n "$CAPABILITY_PROFILE" ]; then
   case "$PROFILE_NETWORK" in
     internet)   ;;  # default pasta:--no-map-gw
     llm-gateway)
-      # Delegate to analysis.sh for gateway lifecycle and internal network.
-      # run.sh alone cannot orchestrate the gateway; reject early.
-      echo "use ./analysis.sh for llm-gateway capability profiles (it manages the gateway lifecycle)" >&2
-      echo "or:  HERMES_ANALYSIS=1 ./run.sh" >&2
-      exit 1
+      # When called from analysis.sh (which sets HERMES_ANALYSIS=1), the
+      # gateway and internal network are already running.  When called
+      # directly, instruct the user to use analysis.sh instead.
+      if [ "${HERMES_ANALYSIS:-0}" != "1" ]; then
+        echo "use ./analysis.sh for llm-gateway capability profiles (it manages the gateway lifecycle)" >&2
+        echo "or:  HERMES_ANALYSIS=1 ./run.sh --capability-profile analysis" >&2
+        exit 1
+      fi
       ;;
     local-dual)
       # Requires a local model profile and the internal hermes-llm network.
@@ -249,6 +254,7 @@ if [ -n "${HERMES_DATA_MANIFEST:-}" ]; then
     -v "$OUTBOX:/workspace/outbox:rw"
   )
   SAFE_WRITE_ROOTS+=(/workspace/outbox)
+  OUTBOX_ALREADY_MOUNTED=1
   WORKDIR_ARGS=(--workdir /workspace)
 fi
 
@@ -299,11 +305,12 @@ if [ -n "$CAPABILITY_PROFILE" ]; then
       -v "$DATASETS:/workspace/data:ro"
     )
   fi
-  if [ "$PROFILE_MOUNT_OUTBOX" = "true" ]; then
+  if [ "$PROFILE_MOUNT_OUTBOX" = "true" ] && [ "${OUTBOX_ALREADY_MOUNTED:-0}" != "1" ]; then
     [ -d "$OUTBOX" ] || { echo "missing outbox directory: $OUTBOX" >&2; exit 1; }
     MOUNT_ARGS+=(
       -v "$OUTBOX:/workspace/outbox:rw"
     )
+    SAFE_WRITE_ROOTS+=(/workspace/outbox)
   fi
 fi
 

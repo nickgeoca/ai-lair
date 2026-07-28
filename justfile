@@ -32,6 +32,7 @@ test:
     bash -n ./*.sh ./tests/*.sh
     ./profile-read.sh validate
     ./tests/capability-profiles.sh
+    ./tests/run-capability-args.sh
     ./tests/local-models.sh
     ./tests/run-safe-roots.sh
     ./local-models.sh validate

@@ -146,13 +146,26 @@ fi
 # ── Test: analysis profile redirects to analysis.sh ─────────────────────────
 
 echo
-echo "=== llm-gateway rejection ==="
+echo "=== llm-gateway ==="
+# Direct call without HERMES_ANALYSIS should instruct to use analysis.sh.
 output="$(env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
   bash "$HERE/run.sh" --capability-profile analysis true 2>&1 || true)"
 if echo "$output" | grep -qi "analysis.sh"; then
-  pass "analysis profile redirects to analysis.sh"
+  pass "analysis profile (direct) redirects to analysis.sh"
 else
   fail "analysis profile should redirect: $output"
+fi
+# With HERMES_ANALYSIS=1, the analysis profile should proceed.
+rm -f "$ARGS_FILE"
+env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+  HERMES_ANALYSIS=1 \
+  bash "$HERE/run.sh" --capability-profile analysis true 2>/dev/null || true
+if [ -f "$ARGS_FILE" ] && grep -qF "hermes-analysis" "$ARGS_FILE"; then
+  pass "analysis profile + HERMES_ANALYSIS=1 uses analysis network"
+elif [ -f "$ARGS_FILE" ]; then
+  fail "analysis profile + HERMES_ANALYSIS=1 wrong network: $(tr '\n' ' ' < "$ARGS_FILE")"
+else
+  fail "analysis profile + HERMES_ANALYSIS=1 did not reach podman"
 fi
 
 # ── Test: HERMES_ANALYSIS with dev profile rejected ─────────────────────────
@@ -162,10 +175,26 @@ echo "=== env var contradiction ==="
 output="$(env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
   HERMES_ANALYSIS=1 \
   bash "$HERE/run.sh" --capability-profile dev true 2>&1 || true)"
-if echo "$output" | grep -qi "incompatible"; then
+if echo "$output" | grep -qi "contradicts"; then
   pass "HERMES_ANALYSIS rejected with dev profile"
 else
   fail "HERMES_ANALYSIS should be rejected: $output"
+fi
+
+# ── Test: --capability-profile does not consume Hermes --profile ─────────────
+
+echo
+echo "=== option collision ==="
+rm -f "$ARGS_FILE"
+env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+  HERMES_REPOS=test-repo \
+  bash "$HERE/run.sh" --capability-profile dev --profile my-hermes-profile true 2>/dev/null || true
+if [ -f "$ARGS_FILE" ] && grep -qF -- '--profile' "$ARGS_FILE"; then
+  pass "--capability-profile does not consume Hermes --profile"
+elif [ -f "$ARGS_FILE" ]; then
+  fail "--capability-profile consumed --profile (args: $(tr '\n' ' ' < "$ARGS_FILE"))"
+else
+  fail "--capability-profile did not reach podman"
 fi
 
 # ── Cleanup ─────────────────────────────────────────────────────────────────

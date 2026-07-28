@@ -110,6 +110,14 @@ if command -v jq >/dev/null 2>&1; then
     '{"id":"no-label","network":"internet","model":{"type":"cloud"}}' \
     "$neg_dir"
 
+  run_neg_test "datasets with internet network" \
+    '{"id":"bad-ds","label":"x","network":"internet","mounts":{"datasets":"ro"},"model":{"type":"cloud"}}' \
+    "$neg_dir"
+
+  run_neg_test "local-dual with cloud model" \
+    '{"id":"bad-ld","label":"x","network":"local-dual","model":{"type":"cloud"}}' \
+    "$neg_dir"
+
   # Clean up local override dir if empty.
   rmdir "$neg_dir" 2>/dev/null || true
 else
@@ -120,36 +128,8 @@ fi
 
 echo
 echo "=== Option collision ==="
-# Simulate: run.sh should pass --profile through when --capability-profile is used.
-# We test by checking the argument-parsing logic via a subshell.
-test_profile_passthrough() {
-  (
-    # Minimal simulation of run.sh's argument parsing.
-    PASSTHROUGH_ARGS=()
-    CAPABILITY_PROFILE=""
-    set -- --capability-profile dev --profile my-hermes-profile --tui
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --capability-profile)
-          [ "$#" -ge 2 ] || { echo "error" >&2; exit 2; }
-          CAPABILITY_PROFILE="$2"; shift 2 ;;
-        --capability-profile=*)
-          CAPABILITY_PROFILE="${1#*=}"; shift ;;
-        *)
-          PASSTHROUGH_ARGS+=("$1"); shift ;;
-      esac
-    done
-    # Hermes's --profile should survive in passthrough.
-    printf '%s\n' "${PASSTHROUGH_ARGS[@]}"
-  )
-}
-actual="$(test_profile_passthrough)"
-expected="--profile my-hermes-profile --tui"
-if [ "$actual" = "$(printf '%s\n' $expected)" ]; then
-  pass "--capability-profile does not consume Hermes --profile"
-else
-  fail "--capability-profile consumed Hermes --profile: got '$actual'"
-fi
+# Tested with fake podman in run-capability-args.sh.
+echo "  SKIP option collision (tested in run-capability-args.sh)"
 
 # ── 5. Environment variable contradiction checks ─────────────────────────────
 

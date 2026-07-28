@@ -77,9 +77,19 @@ validate_one() {
     *) die "profile $expected_id: unknown network type '$network'" ;;
   esac
 
-  # Model validation.
+  # Cross-field validation.
+  # datasets mount requires llm-gateway network (analysis mode only).
+  if jq -e '.mounts.datasets' "$file" >/dev/null 2>&1 && [ "$network" != "llm-gateway" ]; then
+    die "profile $expected_id: mounts.datasets requires network=llm-gateway, got '$network'"
+  fi
+  # local-dual network requires model.type=local.
   local model_type
   model_type="$(jq -r '.model.type' "$file")"
+  if [ "$network" = "local-dual" ] && [ "$model_type" != "local" ]; then
+    die "profile $expected_id: network=local-dual requires model.type=local, got '$model_type'"
+  fi
+
+  # Model validation.
   case "$model_type" in
     cloud) ;;
     local)

@@ -298,6 +298,9 @@ case "$MODE" in
 esac
 
 if [ -n "$LOCAL_PROFILE" ]; then
+  # Local models don't use cloud-only capability profiles; clear the
+  # profile args so run.sh doesn't reject HERMES_LOCAL_PROFILE.
+  PROFILE_ARG=()
   "$HERE/local-models.sh" acquire "$LOCAL_PROFILE" "$CONTAINER_NAME" "$$"
   LOCAL_ACQUIRED=true
   HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
