@@ -55,7 +55,8 @@ validate_one() {
   jq -e '
     type == "object" and
     (.network | type == "string") and
-    (.model | type == "object" and .model.type | type == "string")
+    (.model | type == "object") and
+    (.model.type | type == "string")
   ' "$file" >/dev/null 2>&1 || die "profile $expected_id: missing or invalid required fields"
 
   local network
