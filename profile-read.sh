@@ -52,12 +52,23 @@ validate_one() {
     die "profile $expected_id: .id does not match filename"
   fi
 
+  # Structural checks: object, required fields, no extra keys.
   jq -e '
     type == "object" and
-    (.network | type == "string") and
-    (.model | type == "object") and
-    (.model.type | type == "string")
+    (.id       | type == "string") and
+    (.label    | type == "string" and length > 0) and
+    (.network  | type == "string") and
+    (.model    | type == "object")
   ' "$file" >/dev/null 2>&1 || die "profile $expected_id: missing or invalid required fields"
+
+  # Closed object shape: reject any key not in the schema.
+  local allowed_keys extra
+  allowed_keys='["id","label","description","network","mounts","compute","model"]'
+  extra="$(jq -r --argjson allowed "$allowed_keys" '
+    [ keys[] | select(. as $k | $allowed | index($k) | not) ]
+    | if length > 0 then join(", ") else empty end
+  ' "$file")"
+  [ -z "$extra" ] || die "profile $expected_id: unknown top-level key(s): $extra"
 
   local network
   network="$(jq -r '.network' "$file")"
@@ -66,6 +77,7 @@ validate_one() {
     *) die "profile $expected_id: unknown network type '$network'" ;;
   esac
 
+  # Model validation.
   local model_type
   model_type="$(jq -r '.model.type' "$file")"
   case "$model_type" in
@@ -79,22 +91,70 @@ validate_one() {
     *) die "profile $expected_id: unknown model type '$model_type'" ;;
   esac
 
+  # Reject unknown model keys.
+  local model_extra
+  model_extra="$(jq -r '
+    .model | [ keys[] | select(. as $k | ["type","local_profile"] | index($k) | not) ]
+    | if length > 0 then join(", ") else empty end
+  ' "$file")"
+  [ -z "$model_extra" ] || die "profile $expected_id: unknown model key(s): $model_extra"
+
+  # Mounts validation.
   if jq -e '.mounts' "$file" >/dev/null 2>&1; then
     jq -e '.mounts | type == "object"' "$file" >/dev/null 2>&1 || \
       die "profile $expected_id: .mounts must be an object"
-    local mount_keys
+
+    local mount_keys mount_val
     mount_keys="$(jq -r '.mounts | keys[]' "$file")"
     for key in $mount_keys; do
       case "$key" in
-        repos|data|datasets|outbox) ;;
+        repos)   mount_val="$(jq -r '.mounts.repos' "$file")"
+                 [ "$mount_val" = "rw" ] || die "profile $expected_id: mounts.repos must be \"rw\", got \"$mount_val\"" ;;
+        data)    mount_val="$(jq -r '.mounts.data' "$file")"
+                 [ "$mount_val" = "ro" ] || die "profile $expected_id: mounts.data must be \"ro\", got \"$mount_val\"" ;;
+        datasets) mount_val="$(jq -r '.mounts.datasets' "$file")"
+                  [ "$mount_val" = "ro" ] || die "profile $expected_id: mounts.datasets must be \"ro\", got \"$mount_val\"" ;;
+        outbox)  mount_val="$(jq -r '.mounts.outbox' "$file")"
+                 [ "$mount_val" = "rw" ] || die "profile $expected_id: mounts.outbox must be \"rw\", got \"$mount_val\"" ;;
         *) die "profile $expected_id: unknown mount key '$key'" ;;
       esac
     done
+
+    # Reject extra keys inside mounts object.
+    local mount_allowed mount_inner_extra
+    mount_allowed='["repos","data","datasets","outbox"]'
+    mount_inner_extra="$(jq -r --argjson allowed "$mount_allowed" '
+      .mounts | [ keys[] | select(. as $k | $allowed | index($k) | not) ]
+      | if length > 0 then join(", ") else empty end
+    ' "$file")"
+    [ -z "$mount_inner_extra" ] || die "profile $expected_id: unknown mount key(s): $mount_inner_extra"
   fi
 
+  # Compute validation.
   if jq -e '.compute' "$file" >/dev/null 2>&1; then
     jq -e '.compute | type == "object"' "$file" >/dev/null 2>&1 || \
       die "profile $expected_id: .compute must be an object"
+
+    local compute_keys
+    compute_keys="$(jq -r '.compute | keys[]' "$file")"
+    for key in $compute_keys; do
+      case "$key" in
+        gpu)
+          jq -e '.compute.gpu | type == "boolean"' "$file" >/dev/null 2>&1 || \
+            die "profile $expected_id: compute.gpu must be a boolean"
+          ;;
+        *) die "profile $expected_id: unknown compute key '$key'" ;;
+      esac
+    done
+
+    # Reject extra keys inside compute object.
+    local comp_allowed comp_inner_extra
+    comp_allowed='["gpu"]'
+    comp_inner_extra="$(jq -r --argjson allowed "$comp_allowed" '
+      .compute | [ keys[] | select(. as $k | $allowed | index($k) | not) ]
+      | if length > 0 then join(", ") else empty end
+    ' "$file")"
+    [ -z "$comp_inner_extra" ] || die "profile $expected_id: unknown compute key(s): $comp_inner_extra"
   fi
 }
 
