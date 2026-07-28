@@ -98,7 +98,7 @@ Security properties:
 
 - Only `GET /api/v1/models` and `POST /api/v1/chat/completions` are proxied
 - All other paths return 403
-- `OPENROUTER_API_KEY` is injected via envsubst (read from `data/.env`, never seen by agent)
+- `OPENROUTER_API_KEY` is injected via envsubst (read from `data/.env`; the agent's file tools have it on a denylist, but the terminal can read mounted files — this is defense in depth)
 - `proxy_buffering off` for streaming responses
 - `proxy_read_timeout 1800s` for long generations
 
@@ -279,22 +279,27 @@ The `.gitignore` is an allowlist — everything is ignored by default (`/*`).
 Only explicitly reviewed files are un-ignored. All runtime state (`data/`,
 `repos/`, `outbox/`) is correctly excluded.
 
-## Capability profiles as data (implemented)
+## Capability profiles as data (work in progress)
 
-Currently, capability selection is embedded in shell conditionals. The
-planned evolution extracts this into declarative profiles:
+Capability profiles are declarative JSON files in `profiles/capabilities/`.
+Currently `dev`, `data-science`, and `analysis` profiles are defined and
+validated, and the launcher in `run.sh` enforces mounts, network, model, and
+compute constraints when a profile is active via `--capability-profile`.
+Full enforcement of all schema constraints is still being built out.
 
 ```json
 {
   "id": "dev",
-  "label": "Development with internet",
-  "files": {
+  "label": "Development — internet access",
+  "description": "Work on code with full internet. Repos mounted read-write, results land in outbox/. Host services blocked.",
+  "network": "internet",
+  "mounts": {
     "repos": "rw",
     "outbox": "rw"
   },
-  "network": "internet",
-  "compute": "cpu-only",
-  "model": "cloud"
+  "model": {
+    "type": "cloud"
+  }
 }
 ```
 
@@ -302,19 +307,26 @@ planned evolution extracts this into declarative profiles:
 {
   "id": "analysis",
   "label": "Restricted analysis — no internet",
-  "files": {
+  "description": "Work on sensitive data with NO internet access. Only the LLM API gateway is reachable. Datasets mounted read-only, results land in outbox/.",
+  "network": "llm-gateway",
+  "mounts": {
     "datasets": "ro",
     "outbox": "rw"
   },
-  "network": "llm-gateway",
-  "compute": "cpu-only",
-  "model": "cloud"
+  "compute": {
+    "gpu": true
+  },
+  "model": {
+    "type": "cloud"
+  }
 }
 ```
 
-The launcher reads a profile, validates it, and generates Podman flags
-deterministically. Profiles are data — auditable, diffable, shareable.
-New modes are new profile files, not new shell branches.
+Profiles are validated by `profile-read.sh` against the constraints in
+`profiles/capabilities/schema.json`. The launcher reads a profile, validates
+it, and generates Podman flags deterministically. Profiles are data —
+auditable, diffable, shareable. New modes are new profile files, not new
+shell branches.
 
 ## Cross-cutting concerns
 
@@ -328,8 +340,9 @@ network existence, secret presence) before any containers are created.
 
 `just test` runs:
 1. `bash -n` syntax checks on all `.sh` files
-2. `tests/local-models.sh` — profile validation, override behavior, reserved argument rejection, safety checks
-3. `local-models.sh validate` — validates all effective profiles against the JSON schema
+2. `profile-read.sh validate` — validates all capability profiles against the JSON schema
+3. `tests/local-models.sh` — profile validation, override behavior, reserved argument rejection, safety checks
+4. `local-models.sh validate` — validates all effective local-model profiles against their JSON schema
 
 No integration tests yet (requires a running Podman environment).
 

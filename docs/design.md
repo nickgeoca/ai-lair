@@ -23,7 +23,7 @@ sandbox defines the *contract* between the agent and the host.
 | Agent escalates privileges inside the container | `no-new-privileges` blocks setuid; `--cap-drop=ALL` on hardened containers |
 | Container escape → host compromise | Rootless Podman with user namespace remapping (`uid=10000`); escape lands in unprivileged user namespace |
 | Malicious prompt injection in the LLM gateway | nginx only proxies two whitelisted API paths; all others return 403 |
-| One agent session interferes with another | Slot system with flock-based reservation; each session is an isolated container |
+| One agent session interferes with another | Slot system with flock-based reservation; each session is an isolated container (but sessions share `/opt/data` — they can interfere through configuration, credentials, memory, and history) |
 
 ### What we do NOT defend against
 
@@ -102,7 +102,7 @@ The analysis mode gateway is an nginx container that:
 
 - Accepts only `GET /api/v1/models` and `POST /api/v1/chat/completions`
 - Returns 403 on all other paths
-- Injects the API key server-side (the agent never sees it)
+- Injects the API key server-side (the agent's file tools have the env file on a denylist; the terminal can still read mounted files — this is defense in depth, not a security boundary)
 - Runs read-only, `--cap-drop=ALL`, memory-capped at 128 MB
 - Pinned by SHA256 digest
 
