@@ -1,0 +1,13 @@
+{
+  "id": "data-science",
+  "label": "Data science — read-only data",
+  "description": "Analyze files with internet. Data mounted read-only, results land in outbox/. Host services blocked.",
+  "network": "internet",
+  "mounts": {
+    "data": "ro",
+    "outbox": "rw"
+  },
+  "model": {
+    "type": "cloud"
+  }
+}

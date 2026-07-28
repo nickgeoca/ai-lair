@@ -12,6 +12,7 @@
 !/local-models.sh
 !/run.sh
 !/slot-run.sh
+!/profile-read.sh
 
 # Public configuration and container-workspace files. Ignore new files within
 # these directories until they have been deliberately reviewed and allowlisted.
@@ -23,6 +24,10 @@
 /profiles/*
 !/profiles/default.conf
 !/profiles/flat.conf
+!/profiles/capabilities/
+/profiles/capabilities/*
+!/profiles/capabilities/schema.json
+!/profiles/capabilities/*.json
 
 !/workspace/
 /workspace/*

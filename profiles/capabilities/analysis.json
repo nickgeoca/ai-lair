@@ -1,0 +1,16 @@
+{
+  "id": "analysis",
+  "label": "Restricted analysis — no internet",
+  "description": "Work on sensitive data with NO internet access. Only the LLM API gateway is reachable. Datasets mounted read-only, results land in outbox/.",
+  "network": "llm-gateway",
+  "mounts": {
+    "datasets": "ro",
+    "outbox": "rw"
+  },
+  "compute": {
+    "gpu": true
+  },
+  "model": {
+    "type": "cloud"
+  }
+}

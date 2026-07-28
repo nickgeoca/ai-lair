@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hermes sandbox capability profile",
+  "description": "Declarative capability set for an AI agent session. The launcher validates the profile and translates it to Podman runtime flags. Profiles are data — auditable, diffable, shareable.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "label", "network", "model"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+      "description": "Machine-readable identifier matching the filename stem"
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable name shown in menus"
+    },
+    "description": {
+      "type": "string",
+      "description": "What this profile allows the agent to do"
+    },
+    "network": {
+      "type": "string",
+      "enum": ["internet", "llm-gateway", "local-dual"],
+      "description": "internet = pasta --no-map-gw (web yes, host no). llm-gateway = internal network with nginx proxy. local-dual = podman bridge + hermes-llm internal net."
+    },
+    "mounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repos": {
+          "type": "string",
+          "enum": ["rw"],
+          "description": "Mount disposable Git clones at /workspace/repo"
+        },
+        "data": {
+          "type": "string",
+          "enum": ["ro"],
+          "description": "Mount user-selected data files at /workspace/data (read-only)"
+        },
+        "datasets": {
+          "type": "string",
+          "enum": ["ro"],
+          "description": "Mount the datasets/ directory at /workspace/data (read-only, analysis mode)"
+        },
+        "outbox": {
+          "type": "string",
+          "enum": ["rw"],
+          "description": "Mount the outbox/ directory at /workspace/outbox (read-write, results exit)"
+        }
+      }
+    },
+    "compute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gpu": {
+          "type": "boolean",
+          "description": "Request NVIDIA GPU device access (for local model inference)"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["cloud", "local"],
+          "description": "cloud = OpenRouter API. local = llama.cpp backend managed by local-models.sh"
+        },
+        "local_profile": {
+          "type": "string",
+          "description": "When type=local, the catalog model profile ID (e.g. gemma-4-e4b)"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"type": {"const": "local"}},
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["local_profile"]
+          }
+        }
+      ]
+    }
+  }
+}

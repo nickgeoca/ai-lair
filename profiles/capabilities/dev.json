@@ -1,0 +1,13 @@
+{
+  "id": "dev",
+  "label": "Development — internet access",
+  "description": "Work on code with full internet. Repos mounted read-write, results land in outbox/. Host services blocked.",
+  "network": "internet",
+  "mounts": {
+    "repos": "rw",
+    "outbox": "rw"
+  },
+  "model": {
+    "type": "cloud"
+  }
+}
