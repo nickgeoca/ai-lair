@@ -89,23 +89,66 @@ if [ -n "$CAPABILITY_PROFILE" ]; then
   PROFILE_NETWORK="$(jq -r '.network' <<<"$PROFILE_JSON")"
   PROFILE_MODEL_TYPE="$(jq -r '.model.type' <<<"$PROFILE_JSON")"
 
+  # --- Reject contradictory legacy env vars ---
+  if [ "${HERMES_ANALYSIS:-0}" = "1" ]; then
+    echo "HERMES_ANALYSIS is incompatible with capability profiles; use --capability-profile analysis instead" >&2
+    exit 1
+  fi
+  if [ "${HERMES_LOCAL_LLM:-0}" = "1" ] && [ "$PROFILE_MODEL_TYPE" != "local" ]; then
+    echo "HERMES_LOCAL_LLM requires a local-model capability profile" >&2
+    exit 1
+  fi
+  if [ -n "${HERMES_LOCAL_PROFILE:-}" ] && [ "$PROFILE_MODEL_TYPE" != "local" ]; then
+    echo "HERMES_LOCAL_PROFILE contradicts cloud-only capability profile '$CAPABILITY_PROFILE'" >&2
+    exit 1
+  fi
+
+  # --- Network ---
   case "$PROFILE_NETWORK" in
-    internet)   ;;  # default pasta:--no-map-gw, set below
-    llm-gateway) HERMES_ANALYSIS=1 ;;
-    local-dual)  ;;  # driven by model.local_profile in the local-model block
+    internet)   ;;  # default pasta:--no-map-gw
+    llm-gateway)
+      # Delegate to analysis.sh for gateway lifecycle and internal network.
+      # run.sh alone cannot orchestrate the gateway; reject early.
+      echo "use ./analysis.sh for llm-gateway capability profiles (it manages the gateway lifecycle)" >&2
+      echo "or:  HERMES_ANALYSIS=1 ./run.sh" >&2
+      exit 1
+      ;;
+    local-dual)
+      # Requires a local model profile and the internal hermes-llm network.
+      if [ "$PROFILE_MODEL_TYPE" != "local" ]; then
+        echo "network=local-dual requires model.type=local" >&2
+        exit 1
+      fi
+      ;;
     *) echo "internal error: unknown network type '$PROFILE_NETWORK'" >&2; exit 1 ;;
   esac
 
+  # --- Model ---
   if [ "$PROFILE_MODEL_TYPE" = "local" ]; then
     HERMES_LOCAL_PROFILE="$(jq -r '.model.local_profile' <<<"$PROFILE_JSON")"
   fi
 
-  # mounts.datasets implies the analysis-mode dataset + outbox mounts.
+  # --- Mounts ---
+  # Profiles declare desired mounts; the launcher enforces them.
+  PROFILE_MOUNT_REPOS="false"
+  PROFILE_MOUNT_DATA="false"
+  PROFILE_MOUNT_DATASETS="false"
+  PROFILE_MOUNT_OUTBOX="false"
+
+  if jq -e '.mounts.repos' <<<"$PROFILE_JSON" >/dev/null 2>&1; then
+    PROFILE_MOUNT_REPOS="true"
+  fi
+  if jq -e '.mounts.data' <<<"$PROFILE_JSON" >/dev/null 2>&1; then
+    PROFILE_MOUNT_DATA="true"
+  fi
   if jq -e '.mounts.datasets' <<<"$PROFILE_JSON" >/dev/null 2>&1; then
-    HERMES_ANALYSIS=1
+    PROFILE_MOUNT_DATASETS="true"
+  fi
+  if jq -e '.mounts.outbox' <<<"$PROFILE_JSON" >/dev/null 2>&1; then
+    PROFILE_MOUNT_OUTBOX="true"
   fi
 
-  # compute.gpu requests NVIDIA device access.
+  # --- Compute ---
   if jq -e '.compute.gpu == true' <<<"$PROFILE_JSON" >/dev/null 2>&1; then
     PROFILE_WANTS_GPU=1
   fi
@@ -227,6 +270,41 @@ elif [ "${#SELECTED_REPOS[@]}" -gt 1 ]; then
   MOUNT_ARGS+=(
     -v "$WORKSPACE_INSTRUCTIONS:/workspace/repos/AGENTS.md:ro"
   )
+fi
+
+# --- Capability profile mount enforcement ---
+# When a capability profile is active, it authorizes which mounts are allowed
+# and mandates mounts that don't depend on user input (datasets, outbox).
+if [ -n "$CAPABILITY_PROFILE" ]; then
+  if [ "$PROFILE_MOUNT_REPOS" = "true" ] && [ "${#SELECTED_REPOS[@]}" -eq 0 ]; then
+    echo "capability profile '$CAPABILITY_PROFILE' requires repositories; pass repo names or use just run-repo" >&2
+    exit 1
+  fi
+  if [ "$PROFILE_MOUNT_REPOS" != "true" ] && [ "${#SELECTED_REPOS[@]}" -gt 0 ]; then
+    echo "capability profile '$CAPABILITY_PROFILE' does not allow repository mounts" >&2
+    exit 1
+  fi
+  if [ "$PROFILE_MOUNT_DATA" = "true" ] && [ -z "${HERMES_DATA_MANIFEST:-}" ]; then
+    echo "capability profile '$CAPABILITY_PROFILE' requires data mounts; use just run-data" >&2
+    exit 1
+  fi
+  if [ "$PROFILE_MOUNT_DATA" != "true" ] && [ -n "${HERMES_DATA_MANIFEST:-}" ]; then
+    echo "capability profile '$CAPABILITY_PROFILE' does not allow data mounts" >&2
+    exit 1
+  fi
+  # Profile-mandated mounts that don't depend on user input.
+  if [ "$PROFILE_MOUNT_DATASETS" = "true" ]; then
+    [ -d "$DATASETS" ] || { echo "missing dataset directory: $DATASETS" >&2; exit 1; }
+    MOUNT_ARGS+=(
+      -v "$DATASETS:/workspace/data:ro"
+    )
+  fi
+  if [ "$PROFILE_MOUNT_OUTBOX" = "true" ]; then
+    [ -d "$OUTBOX" ] || { echo "missing outbox directory: $OUTBOX" >&2; exit 1; }
+    MOUNT_ARGS+=(
+      -v "$OUTBOX:/workspace/outbox:rw"
+    )
+  fi
 fi
 
 # Default: host services unreachable. HERMES_LOCAL_LLM=1 re-enables the
