@@ -292,8 +292,8 @@ fi
 # profiles/capabilities/<name>.json file and is validated by run.sh.
 PROFILE_ARG=()
 case "$MODE" in
-  repo) PROFILE_ARG=(--profile dev) ;;
-  data) PROFILE_ARG=(--profile data-science) ;;
+  repo) PROFILE_ARG=(--capability-profile dev) ;;
+  data) PROFILE_ARG=(--capability-profile data-science) ;;
   run)  ;;  # no profile for bare shell/chat mode
 esac
 

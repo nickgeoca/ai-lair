@@ -17,7 +17,7 @@
 #   ./run.sh model        change provider/model
 #   ./run.sh bash         shell inside the sandbox
 #   HERMES_REPOS="repo1 repo2" ./run.sh
-#   ./run.sh --profile dev    use a capability profile (see profile-read.sh list)
+#   ./run.sh --capability-profile dev    use a capability profile (see profile-read.sh list)
 #   HERMES_DATA_MANIFEST=/path/to/manifest ./run.sh
 #   ./analysis.sh         restricted analysis with no general Internet access
 #
@@ -54,20 +54,20 @@ LABEL_ARGS=()
 # even though the same paths remain writable through the terminal tool.
 SAFE_WRITE_ROOTS=(/opt/data)
 
-# --profile <name> selects a declarative capability profile.  The profile is
-# validated by profile-read.sh and translated into the internal mode variables
-# that the rest of this script already uses.  When --profile is not set, the
-# existing environment-variable API continues to work unchanged.
+# --capability-profile <name> selects a declarative capability profile.  The
+# profile is validated by profile-read.sh and translated into the internal mode
+# variables that the rest of this script already uses.  When the option is not
+# set, the existing environment-variable API continues to work unchanged.
 CAPABILITY_PROFILE=""
 PASSTHROUGH_ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --profile)
-      [ "$#" -ge 2 ] || { echo "--profile requires a name" >&2; exit 2; }
+    --capability-profile)
+      [ "$#" -ge 2 ] || { echo "--capability-profile requires a name" >&2; exit 2; }
       CAPABILITY_PROFILE="$2"
       shift 2
       ;;
-    --profile=*)
+    --capability-profile=*)
       CAPABILITY_PROFILE="${1#*=}"
       shift
       ;;
