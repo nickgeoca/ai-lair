@@ -73,20 +73,7 @@ Profiles are therefore labels over the existing mode branches, not an
 enforcement boundary. The launcher must fail closed when requested inputs,
 model selection, network mode, and the selected profile disagree.
 
-### 6. The branch predates the file-tool safe-root fix
-
-Primary `main` contains:
-
-```text
-6c35be8 fix: allow Hermes file tools in writable mounts
-```
-
-That commit dynamically sets `HERMES_WRITE_SAFE_ROOT` to `/opt/data`, only the
-selected writable repository mounts, and `/workspace/outbox` when enabled.
-Rebase or rebuild this work on top of that commit and preserve its regression
-tests. Do not broaden the safe root to `/workspace`.
-
-### 7. Security documentation overclaims current isolation
+### 6. Security documentation overclaims current isolation
 
 Revise these claims before publication:
 
@@ -108,17 +95,17 @@ actual boundary precisely.
 A capability profile should be an authorization policy, while command inputs
 identify the concrete resources the user selected:
 
-1. Parse and fully validate one profile before creating containers or changing
+1. **(bug fix)** Parse and fully validate one profile before creating containers or changing
    runtime state.
-2. Resolve explicit repository/data inputs using the existing path checks.
-3. Reject inputs not authorized by the profile.
-4. Derive mounts, network attachments, devices, model routing, secrets, and
+2. **(existing, needs wiring)** Resolve explicit repository/data inputs using the existing path checks.
+3. **(new)** Reject inputs not authorized by the profile.
+4. **(new)** Derive mounts, network attachments, devices, model routing, secrets, and
    `HERMES_WRITE_SAFE_ROOT` deterministically from the validated combination.
-5. Reject contradictory legacy environment variables when a capability profile
+5. **(new)** Reject contradictory legacy environment variables when a capability profile
    is active.
-6. Start and clean up required auxiliary services, or reject profiles that the
+6. **(new)** Start and clean up required auxiliary services, or reject profiles that the
    selected entry point cannot orchestrate.
-7. Preserve the legacy no-profile interface until it is deliberately removed.
+7. **(existing, needs test)** Preserve the legacy no-profile interface until it is deliberately removed.
 
 ## Minimum regression coverage
 
@@ -136,7 +123,10 @@ Add tests that run without downloading images or model weights:
 - `analysis` cannot launch without its internal network and gateway lifecycle;
 - local-model selection cannot contradict a cloud-only profile;
 - unrelated repositories, host paths, the Podman socket, and read-only data
-  never enter the writable allowlist.
+  never enter the writable allowlist;
+- the legacy no-profile path (bare `just run`, bare `HERMES_REPOS=… ./run.sh`)
+  still works and produces the expected mounts, networking, and safe roots
+  without profile interference.
 
 Use a fake `podman` executable to capture and assert the final argument vector,
 following `tests/run-safe-roots.sh`.
@@ -144,7 +134,10 @@ following `tests/run-safe-roots.sh`.
 ## Suggested repair sequence
 
 1. Rebase the work onto current primary `main`, resolving conflicts in
-   `run.sh`, `slot-run.sh`, `.gitignore`, `justfile`, and tests.
+   `run.sh`, `slot-run.sh`, `.gitignore`, `justfile`, and tests. Preserve
+   `HERMES_WRITE_SAFE_ROOT` behavior from `6c35be8` (dynamic safe roots
+   scoped to `/opt/data`, selected writable mounts, and outbox — not
+   `/workspace`).
 2. Restore a green baseline before adding behavior.
 3. Rename the wrapper option and implement complete profile validation.
 4. Make profiles authoritative and fail closed on contradictions.
