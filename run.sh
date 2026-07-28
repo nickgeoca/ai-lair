@@ -46,6 +46,8 @@ ENV_ARGS=()
 MOUNT_ARGS=()
 DEVICE_ARGS=()
 WORKDIR_ARGS=()
+SECRET_ARGS=()
+LABEL_ARGS=()
 
 # Repositories are selected by basename and mounted individually. Never bind-
 # mount repos/ itself: unrelated disposable clones must remain invisible.
@@ -170,6 +172,41 @@ if [ "${HERMES_LOCAL_LLM:-0}" = "1" ]; then
   NET_ARGS=(--network=pasta)
 fi
 
+# Catalog-backed local models use an internal container network for inference
+# and the ordinary rootless Podman bridge for tool egress. Profile fields are
+# resolved by the trusted launcher rather than accepted as arbitrary URLs,
+# container names, or secret names from the environment.
+LOCAL_PROFILE="${HERMES_LOCAL_PROFILE:-}"
+if [ -n "$LOCAL_PROFILE" ]; then
+  if [ "${HERMES_LOCAL_LLM:-0}" = "1" ]; then
+    echo "HERMES_LOCAL_PROFILE and HERMES_LOCAL_LLM cannot be combined" >&2
+    exit 1
+  fi
+  if [ "${HERMES_ANALYSIS:-0}" = "1" ]; then
+    echo "catalog local models and restricted analysis mode cannot be combined" >&2
+    exit 1
+  fi
+  LOCAL_CONTAINER="$("$HERE/local-models.sh" field "$LOCAL_PROFILE" container)"
+  LOCAL_SECRET="$("$HERE/local-models.sh" field "$LOCAL_PROFILE" secret)"
+  LOCAL_NETWORK="${HERMES_LOCAL_NETWORK:-hermes-llm}"
+  if ! podman network exists "$LOCAL_NETWORK" 2>/dev/null ||
+     [ "$(podman network inspect -f '{{.Internal}}' "$LOCAL_NETWORK")" != "true" ]; then
+    echo "missing or non-internal local-model network: $LOCAL_NETWORK" >&2
+    exit 1
+  fi
+  NET_ARGS=(--network podman --network "$LOCAL_NETWORK")
+  ENV_ARGS+=(
+    -e "OPENAI_BASE_URL=http://$LOCAL_CONTAINER:8080/v1"
+  )
+  SECRET_ARGS+=(
+    --secret="$LOCAL_SECRET,type=env,target=OPENAI_API_KEY"
+  )
+  LABEL_ARGS+=(
+    --label io.hermes.local-session=true
+    --label "io.hermes.local-model=$LOCAL_PROFILE"
+  )
+fi
+
 # Restricted analysis mode is started by analysis.sh, which provides a fixed
 # LLM gateway on this internal-only network. The normal Internet-capable mode
 # never sees the staged datasets.
@@ -202,4 +239,6 @@ exec podman run -it --rm \
   -v "$DATA:/opt/data" \
   "${DEVICE_ARGS[@]}" \
   "${MOUNT_ARGS[@]}" \
+  "${SECRET_ARGS[@]}" \
+  "${LABEL_ARGS[@]}" \
   "$IMAGE" "$@"

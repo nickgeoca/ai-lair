@@ -14,6 +14,20 @@ slots count="":
 status:
     ./slot-run.sh status
 
+# list tested local-model profiles and their installation state
+local-models:
+    ./local-models.sh list
+
+# explicitly install or synchronize one local-model profile
+local-setup profile:
+    ./local-models.sh setup {{ quote(profile) }}
+
+# run syntax checks and local-model profile tests without downloading models
+test:
+    bash -n ./*.sh ./tests/*.sh
+    ./tests/local-models.sh
+    ./local-models.sh validate
+
 # run with selected disposable repository clones and normal Internet access
 run-repo +repos:
     #!/usr/bin/env bash

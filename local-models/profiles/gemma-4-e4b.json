@@ -1,0 +1,21 @@
+{
+  "id": "gemma-4-e4b",
+  "label": "Gemma 4 E4B — fast local",
+  "hermes_model": "ggml-org/gemma-4-E4B-it-GGUF:Q4_0",
+  "image": "ghcr.io/ggml-org/llama.cpp@sha256:4df27e919b6eac39e2c6caffdcc735c2d855921f0fdeb9cba1aed9e47a50a21d",
+  "model_source": "ggml-org/gemma-4-E4B-it-GGUF:Q4_0",
+  "container": "llama-gemma4",
+  "volume": "llama-gemma4-e4b-models",
+  "secret": "llama-gemma4-api-key",
+  "download_gib": 4.3,
+  "vram_mib": 4696,
+  "tested_hardware": "NVIDIA RTX 5070 Laptop GPU with 8 GiB VRAM",
+  "llama_args": [
+    "-ngl", "all",
+    "-c", "65536",
+    "-np", "1",
+    "-fa", "on",
+    "-ctk", "q8_0",
+    "-ctv", "q8_0"
+  ]
+}

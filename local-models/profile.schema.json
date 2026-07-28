@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Hermes local llama.cpp model profile",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "label",
+    "hermes_model",
+    "image",
+    "model_source",
+    "container",
+    "volume",
+    "secret",
+    "download_gib",
+    "vram_mib",
+    "tested_hardware",
+    "llama_args"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+    "label": { "type": "string", "minLength": 1 },
+    "hermes_model": { "type": "string", "minLength": 1 },
+    "image": {
+      "type": "string",
+      "pattern": "@sha256:[a-f0-9]{64}$"
+    },
+    "model_source": { "type": "string", "minLength": 1 },
+    "container": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$" },
+    "volume": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$" },
+    "secret": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$" },
+    "download_gib": { "type": "number", "exclusiveMinimum": 0 },
+    "vram_mib": { "type": "integer", "minimum": 0 },
+    "tested_hardware": { "type": "string", "minLength": 1 },
+    "llama_args": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

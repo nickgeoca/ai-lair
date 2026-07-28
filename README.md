@@ -13,12 +13,12 @@ just --list
 ## Everyday commands
 
 ```bash
-just slots 4                          # allow up to four parallel Hermes sessions
-just status                           # show running and available slots
-just run                              # no project or data access
-just run-repo sdk-rec                 # one disposable project clone
-just run-repo sdk-rec habbit-track    # multiple disposable project clones
-just run-data ~/Downloads/paper.pdf   # selected data, read-only, normal Internet
+just slots 4                      # allow up to four parallel Hermes sessions
+just status                       # show running and available slots
+just run                          # no project or data access
+just run-repo example-api         # one disposable project clone
+just run-repo example-api example-web
+just run-data ~/Downloads/paper.pdf
 ```
 
 Each launch claims the lowest available slot, opens the model/provider menu,
@@ -26,6 +26,40 @@ and starts the TUI. Containers disappear on exit. Every slot mounts the same
 persistent default Hermes home, so sessions, memories, identity, skills, logs,
 credentials, and configuration are shared. Pressing Enter at the model menu
 selects DeepSeek V4 Flash through OpenRouter's Novita FP8 route.
+
+## Optional local models
+
+The model menu keeps the cloud presets first and appends the declarative local
+profiles from `local-models/profiles/`. Cloning this repository does not pull a
+llama.cpp image or download model weights. Uninstalled local models are labeled
+in the menu and require an explicit confirmation before setup downloads only
+the selected model; there is deliberately no bulk-install command.
+
+```bash
+just local-models
+just local-setup gemma-4-e4b
+just local-setup qwen-3-6-35b
+```
+
+Local setup requires `jq`, `openssl`, rootless Podman, and NVIDIA CDI support.
+It creates or validates an internal `hermes-llm` network, a Podman secret, one
+model volume, and a stopped hardened llama.cpp backend. Model weights remain in
+Podman volumes and are never stored in this Git repository. Existing compatible
+containers and cached weights are reused.
+
+Each tracked JSON profile contains only model metadata and inference arguments;
+it cannot add host mounts, publish ports, or change the fixed container security
+policy. Add or remove one JSON file to contribute a public model. Put private
+profiles in the ignored `local-models.local/` directory; a matching local ID
+overrides its tracked profile.
+
+Normal, repository, and data launches can use local profiles. Multiple Hermes
+slots may share the same local backend, but a different local model is refused
+while one is reserved. The backend stops after the last matching Hermes session
+ends and also unloads idle weights after 60 seconds. Local sessions use the
+ordinary rootless Podman bridge for tool egress in addition to the internal
+inference network, so they do not have normal mode's stricter `pasta` gateway
+isolation. They still receive no host home, Podman socket, or unrelated mounts.
 
 ## Parallel-session safety
 
@@ -61,8 +95,8 @@ operate on the selected repository.
 With multiple selected repositories, Hermes sees only those repositories at:
 
 ```text
-/workspace/repos/sdk-rec
-/workspace/repos/habbit-track
+/workspace/repos/example-api
+/workspace/repos/example-web
 ```
 
 Hermes starts in `/workspace/repos`, so both selected repositories are visible
@@ -82,8 +116,8 @@ combined.
 ## Review and bring work back
 
 ```bash
-just get-repo sdk-rec
-just get-repo sdk-rec habbit-track
+just get-repo example-api
+just get-repo example-api example-web
 ```
 
 `get-repo` preflights every named repository before changing anything. It:
@@ -109,3 +143,27 @@ just options
 Slot launches always use the modern TUI. Sandbox configuration is versioned in
 this repository. Runtime state, secrets, datasets, outputs, disposable clones,
 slot reservations, and the separate upstream `src/` checkout are ignored.
+
+## Before publishing
+
+This wrapper is currently tailored to one local setup. Before publishing it for
+other people to use:
+
+- document prerequisites and the complete first-run setup;
+- document or automate how the pinned `hermes-agent:v2026.7.1` image is built
+  from the separately managed `src/` checkout;
+- document the current platform assumptions: Linux, Bash, rootless Podman with
+  `pasta`, Git, `just`, primary repositories beneath `~/projects`, OpenRouter,
+  and NVIDIA container device support for restricted analysis mode;
+- make the default models, provider routes, primary repository directory, and
+  optional GPU behavior configurable where practical;
+- add a license and a concise security model covering what the sandbox does and
+  does not protect;
+- add continuous integration for the shell and profile validation checks;
+- scan the complete Git history for secrets and private data immediately before
+  attaching a public remote.
+
+NixOS is not currently a runtime requirement: no tracked file refers to NixOS
+or `/etc/nixos`. A Nix flake or NixOS module could later provide a convenient,
+optional way to install the prerequisites, but it should remain separate from
+the portable shell-and-Podman implementation.

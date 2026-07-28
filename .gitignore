@@ -1,17 +1,43 @@
-# Hermes credentials, conversations, caches, and mutable runtime state.
-/.env
-/data/
+# This repository uses an allowlist so miscellaneous local files cannot be
+# staged accidentally. When adding a new public project file, explicitly
+# unignore it here and review it before committing.
+/*
 
-# Sensitive inputs and generated outputs.
-/datasets/
-/outbox/
+# Public top-level project files.
+!/.gitignore
+!/README.md
+!/justfile
+!/analysis.sh
+!/get-repo.sh
+!/local-models.sh
+!/run.sh
+!/slot-run.sh
 
-# Disposable project clones are managed by the justfile, not this repository.
-/repos/
+# Public configuration and container-workspace files. Ignore new files within
+# these directories until they have been deliberately reviewed and allowlisted.
+!/gateway/
+/gateway/*
+!/gateway/openrouter.conf.template
 
-# Separate upstream Hermes Git checkout; preserve its history independently.
-/src/
+!/profiles/
+/profiles/*
+!/profiles/default.conf
+!/profiles/flat.conf
 
-# Local notes and generated images that are not sandbox configuration.
-/devin-ai.md
-/*.png
+!/workspace/
+/workspace/*
+!/workspace/AGENTS.md
+
+# Declarative, non-executable local-model profiles are contribution-friendly:
+# adding a reviewed JSON profile does not require another .gitignore change.
+!/local-models/
+/local-models/*
+!/local-models/README.md
+!/local-models/profile.schema.json
+!/local-models/profiles/
+/local-models/profiles/*
+!/local-models/profiles/*.json
+
+!/tests/
+/tests/*
+!/tests/local-models.sh

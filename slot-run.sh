@@ -195,7 +195,12 @@ fi
 SLOT=""
 RESERVATION=""
 DATA_MANIFEST=""
+LOCAL_PROFILE=""
+LOCAL_ACQUIRED=false
 cleanup() {
+  if [ "$LOCAL_ACQUIRED" = true ]; then
+    "$HERE/local-models.sh" release "$LOCAL_PROFILE" "${CONTAINER_NAME:-unknown}" || true
+  fi
   [ -z "$DATA_MANIFEST" ] || rm -f -- "$DATA_MANIFEST"
   [ -z "$RESERVATION" ] || rm -f -- "$RESERVATION"
 }
@@ -212,9 +217,27 @@ echo
 echo "1) DeepSeek V4 Flash — OpenRouter / Novita FP8"
 echo "2) DeepSeek V4 Pro — OpenRouter / Novita FP8"
 echo "3) Kimi K3 — OpenRouter / Moonshot AI"
-echo "4) Hermes provider/model picker (changes the shared saved default)"
-read -r -p "Select [1-4, default 1]: " CHOICE
+LOCAL_IDS=()
+LOCAL_LABELS=()
+LOCAL_STATES=()
+if command -v jq >/dev/null 2>&1; then
+  while IFS=$'\t' read -r id label state origin; do
+    [ -n "$id" ] || continue
+    LOCAL_IDS+=("$id")
+    LOCAL_LABELS+=("$label")
+    LOCAL_STATES+=("$state")
+  done < <("$HERE/local-models.sh" list --tsv)
+else
+  echo "Local model profiles hidden: install jq to enable them."
+fi
+for i in "${!LOCAL_IDS[@]}"; do
+  printf '%s) %s [%s]\n' "$((i + 4))" "${LOCAL_LABELS[$i]}" "${LOCAL_STATES[$i]}"
+done
+PICKER_CHOICE=$((4 + ${#LOCAL_IDS[@]}))
+echo "$PICKER_CHOICE) Hermes provider/model picker (changes the shared saved default)"
+read -r -p "Select [1-$PICKER_CHOICE, default 1]: " CHOICE
 CHOICE="${CHOICE:-1}"
+USE_SAVED_MODEL=false
 case "$CHOICE" in
   1)
     MODEL=deepseek/deepseek-v4-flash
@@ -228,21 +251,33 @@ case "$CHOICE" in
     MODEL=moonshotai/kimi-k3
     ROUTE=moonshotai
     ;;
-  4)
+  "$PICKER_CHOICE")
     HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
       "$HERE/run.sh" model
-    HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
-      "$HERE/run.sh" --tui
-    exit
+    USE_SAVED_MODEL=true
     ;;
   *)
-    echo "invalid selection: $CHOICE" >&2
-    exit 2
+    if [[ "$CHOICE" =~ ^[0-9]+$ ]] &&
+       [ "$CHOICE" -ge 4 ] && [ "$CHOICE" -lt "$PICKER_CHOICE" ]; then
+      index=$((CHOICE - 4))
+      LOCAL_PROFILE="${LOCAL_IDS[$index]}"
+      if ! "$HERE/local-models.sh" compatible "$LOCAL_PROFILE"; then
+        echo
+        "$HERE/local-models.sh" setup "$LOCAL_PROFILE"
+      fi
+      MODEL="$("$HERE/local-models.sh" field "$LOCAL_PROFILE" hermes_model)"
+      ROUTE=""
+    else
+      echo "invalid selection: $CHOICE" >&2
+      exit 2
+    fi
     ;;
 esac
 
-HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
-  "$HERE/run.sh" config set provider_routing.only.0 "$ROUTE"
+if [ -z "$LOCAL_PROFILE" ] && [ "$USE_SAVED_MODEL" = false ]; then
+  HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
+    "$HERE/run.sh" config set provider_routing.only.0 "$ROUTE"
+fi
 
 if [ "$MODE" = "repo" ]; then
   export HERMES_REPO_REQUIRED=1
@@ -253,6 +288,15 @@ elif [ "$MODE" = "data" ]; then
   export HERMES_DATA_MANIFEST="$DATA_MANIFEST"
 fi
 
-HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
-  "$HERE/run.sh" --tui \
-  --model "$MODEL" --provider openrouter
+if [ -n "$LOCAL_PROFILE" ]; then
+  "$HERE/local-models.sh" acquire "$LOCAL_PROFILE" "$CONTAINER_NAME" "$$"
+  LOCAL_ACQUIRED=true
+  HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
+    HERMES_LOCAL_PROFILE="$LOCAL_PROFILE" \
+    "$HERE/run.sh" --tui --model "$MODEL" --provider custom
+elif [ "$USE_SAVED_MODEL" = true ]; then
+  HERMES_CONTAINER_NAME="$CONTAINER_NAME" "$HERE/run.sh" --tui
+else
+  HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
+    "$HERE/run.sh" --tui --model "$MODEL" --provider openrouter
+fi
