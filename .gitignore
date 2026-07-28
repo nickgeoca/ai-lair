@@ -38,6 +38,12 @@
 /local-models/profiles/*
 !/local-models/profiles/*.json
 
+# Design and implementation documentation.
+!/docs/
+/docs/*
+!/docs/design.md
+!/docs/implementation.md
+
 !/tests/
 /tests/*
 !/tests/local-models.sh
