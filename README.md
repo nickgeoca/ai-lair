@@ -19,6 +19,7 @@ just run                          # no project or data access
 just run-repo example-api         # one disposable project clone
 just run-repo example-api example-web
 just run-data ~/Downloads/paper.pdf
+just capability-profiles          # list available capability profiles
 ```
 
 Each launch claims the lowest available slot, opens the model/provider menu,

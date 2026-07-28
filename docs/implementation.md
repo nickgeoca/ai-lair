@@ -279,7 +279,7 @@ The `.gitignore` is an allowlist — everything is ignored by default (`/*`).
 Only explicitly reviewed files are un-ignored. All runtime state (`data/`,
 `repos/`, `outbox/`) is correctly excluded.
 
-## Planned: capability profiles as data
+## Capability profiles as data (implemented)
 
 Currently, capability selection is embedded in shell conditionals. The
 planned evolution extracts this into declarative profiles:
