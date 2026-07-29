@@ -26,8 +26,7 @@ local-models:
 local-setup profile:
     ./local-models.sh setup {{ quote(profile) }}
 
-# validate capability profiles (requires jq)
-# run syntax checks and local-model profile tests without downloading models
+# run syntax and profile checks without downloading models
 test:
     bash -n ./*.sh ./tests/*.sh
     ./profile-read.sh validate
@@ -35,7 +34,6 @@ test:
     ./tests/run-capability-args.sh
     ./tests/run-safe-roots.sh
     ./tests/local-models.sh
-    ./tests/run-safe-roots.sh
     ./local-models.sh validate
 
 # run with selected disposable repository clones and normal Internet access
