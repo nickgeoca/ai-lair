@@ -118,6 +118,26 @@ if command -v jq >/dev/null 2>&1; then
     '{"id":"bad-ld","label":"x","network":"local-dual","model":{"type":"cloud"}}' \
     "$neg_dir"
 
+  run_neg_test "local model with internet network" \
+    '{"id":"bad-li","label":"x","network":"internet","model":{"type":"local","local_profile":"gemma-4-e4b"}}' \
+    "$neg_dir"
+
+  run_neg_test "mounts is null" \
+    '{"id":"bad-mn","label":"x","network":"internet","mounts":null,"model":{"type":"cloud"}}' \
+    "$neg_dir"
+
+  run_neg_test "compute is null" \
+    '{"id":"bad-cn","label":"x","network":"internet","compute":null,"model":{"type":"cloud"}}' \
+    "$neg_dir"
+
+  run_neg_test "numeric description" \
+    '{"id":"bad-nd","label":"x","description":42,"network":"internet","model":{"type":"cloud"}}' \
+    "$neg_dir"
+
+  run_neg_test "numeric local_profile" \
+    '{"id":"bad-nl","label":"x","network":"local-dual","model":{"type":"local","local_profile":42}}' \
+    "$neg_dir"
+
   # Clean up local override dir if empty.
   rmdir "$neg_dir" 2>/dev/null || true
 else
@@ -139,7 +159,7 @@ echo "=== Env var contradiction ==="
 test_env_rejection() {
   local name="$1" env_var="$2" env_val="$3" profile="$4"
   local output
-  output="$(env "$env_var=$env_val" \
+  output="$(env -i PATH="$PATH" HOME="$HOME" "$env_var=$env_val" \
     bash "$HERE/run.sh" --capability-profile "$profile" true 2>&1 || true)"
   # Skip if jq is missing — the enforcement logic never runs.
   if echo "$output" | grep -qi "jq is required"; then
@@ -184,7 +204,7 @@ echo "=== Mount enforcement ==="
 test_mount_rejection() {
   local name="$1" profile="$2" env_vars="$3"
   local output
-  output="$(env $env_vars bash "$HERE/run.sh" --capability-profile "$profile" true 2>&1 || true)"
+  output="$(env -i PATH="$PATH" HOME="$HOME" $env_vars bash "$HERE/run.sh" --capability-profile "$profile" true 2>&1 || true)"
   if echo "$output" | grep -qi "jq is required"; then
     echo "  SKIP $name (jq not installed)"
     return

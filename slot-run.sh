@@ -298,8 +298,11 @@ case "$MODE" in
 esac
 
 if [ -n "$LOCAL_PROFILE" ]; then
-  # Local models don't use cloud-only capability profiles; clear the
-  # profile args so run.sh doesn't reject HERMES_LOCAL_PROFILE.
+  # Local models clear the cloud-only capability profile so run.sh doesn't
+  # reject HERMES_LOCAL_PROFILE.  This is a deliberate compatibility choice:
+  # local-model sessions currently bypass the capability-policy system.
+  # A future iteration should add a local-model capability profile (e.g.
+  # network=local-dual, model.type=local) that slot-run.sh selects instead.
   PROFILE_ARG=()
   "$HERE/local-models.sh" acquire "$LOCAL_PROFILE" "$CONTAINER_NAME" "$$"
   LOCAL_ACQUIRED=true

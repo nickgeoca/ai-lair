@@ -370,12 +370,21 @@ if [ "${HERMES_ANALYSIS:-0}" = "1" ]; then
   ENV_ARGS+=(
     -e OPENROUTER_BASE_URL=http://hermes-llm-gateway:8080/api/v1
   )
-  MOUNT_ARGS+=(
-    -v "$DATASETS:/workspace/data:ro"
-    -v "$OUTBOX:/workspace/outbox:rw"
-  )
-  SAFE_WRITE_ROOTS+=(/workspace/outbox)
-  DEVICE_ARGS=(--device nvidia.com/gpu=all)
+  # Only add mounts that weren't already added by the capability profile.
+  if [ "${PROFILE_MOUNT_DATASETS:-false}" != "true" ]; then
+    MOUNT_ARGS+=(
+      -v "$DATASETS:/workspace/data:ro"
+    )
+  fi
+  if [ "${PROFILE_MOUNT_OUTBOX:-false}" != "true" ] && [ "${OUTBOX_ALREADY_MOUNTED:-0}" != "1" ]; then
+    MOUNT_ARGS+=(
+      -v "$OUTBOX:/workspace/outbox:rw"
+    )
+    SAFE_WRITE_ROOTS+=(/workspace/outbox)
+  fi
+  if [ "${PROFILE_WANTS_GPU:-0}" != "1" ]; then
+    DEVICE_ARGS=(--device nvidia.com/gpu=all)
+  fi
 fi
 
 SAFE_WRITE_ROOTS_VALUE="${SAFE_WRITE_ROOTS[0]}"

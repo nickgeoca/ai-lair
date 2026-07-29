@@ -56,3 +56,4 @@
 !/tests/run-safe-roots.sh
 !/tests/capability-profiles.sh
 !/tests/run-capability-args.sh
+!/tests/run-safe-roots.sh

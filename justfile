@@ -33,6 +33,7 @@ test:
     ./profile-read.sh validate
     ./tests/capability-profiles.sh
     ./tests/run-capability-args.sh
+    ./tests/run-safe-roots.sh
     ./tests/local-models.sh
     ./tests/run-safe-roots.sh
     ./local-models.sh validate

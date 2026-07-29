@@ -61,6 +61,20 @@ validate_one() {
     (.model    | type == "object")
   ' "$file" >/dev/null 2>&1 || die "profile $expected_id: missing or invalid required fields"
 
+  # Optional fields: must be the correct type if present.
+  if jq -e 'has("description")' "$file" >/dev/null 2>&1; then
+    jq -e '.description | type == "string"' "$file" >/dev/null 2>&1 || \
+      die "profile $expected_id: .description must be a string"
+  fi
+  if jq -e 'has("mounts")' "$file" >/dev/null 2>&1; then
+    jq -e '.mounts | type == "object"' "$file" >/dev/null 2>&1 || \
+      die "profile $expected_id: .mounts must be an object (not null, scalar, or array)"
+  fi
+  if jq -e 'has("compute")' "$file" >/dev/null 2>&1; then
+    jq -e '.compute | type == "object"' "$file" >/dev/null 2>&1 || \
+      die "profile $expected_id: .compute must be an object (not null, scalar, or array)"
+  fi
+
   # Closed object shape: reject any key not in the schema.
   local allowed_keys extra
   allowed_keys='["id","label","description","network","mounts","compute","model"]'
@@ -88,13 +102,19 @@ validate_one() {
   if [ "$network" = "local-dual" ] && [ "$model_type" != "local" ]; then
     die "profile $expected_id: network=local-dual requires model.type=local, got '$model_type'"
   fi
+  # model.type=local requires a local-capable network.
+  if [ "$model_type" = "local" ] && [ "$network" != "local-dual" ]; then
+    die "profile $expected_id: model.type=local requires network=local-dual, got '$network'"
+  fi
 
   # Model validation.
   case "$model_type" in
     cloud) ;;
     local)
       local local_profile
-      local_profile="$(jq -r '.model.local_profile // ""' "$file")"
+      jq -e '.model.local_profile | type == "string"' "$file" >/dev/null 2>&1 || \
+        die "profile $expected_id: model.local_profile must be a string"
+      local_profile="$(jq -r '.model.local_profile' "$file")"
       [ -n "$local_profile" ] || die "profile $expected_id: local model requires model.local_profile"
       valid_id "$local_profile" || die "profile $expected_id: invalid model.local_profile '$local_profile'"
       ;;

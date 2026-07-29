@@ -42,7 +42,8 @@ capture_args() {
   shift 2
   local extra_env=("$@")
   rm -f "$ARGS_FILE"
-  env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+  env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" \
+    HERMES_WRITE_SAFE_ROOT= \
     "${extra_env[@]}" \
     bash "$HERE/run.sh" --capability-profile "$profile" true 2>/dev/null || true
   if [ -f "$ARGS_FILE" ]; then
@@ -116,14 +117,14 @@ args="$(capture_args "data-science with data" data-science \
 
 assert_flag "data-science: pasta --no-map-gw" "$args" "no-map-gw"
 assert_flag "data-science: outbox mounted" "$args" "/workspace/outbox:rw"
-assert_no_flag "data-science: no repo mounts" "$args" "repos/"
+assert_no_flag "data-science: no repo mounts" "$args" ":/workspace/repo"
 assert_no_flag "data-science: no analysis network" "$args" "hermes-analysis"
 
 # ── Test: dev profile rejects data manifest ─────────────────────────────────
 
 echo
 echo "=== profile mount enforcement ==="
-output="$(env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+output="$(env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
   HERMES_DATA_MANIFEST="$DATA_MANIFEST" HERMES_REPOS=test-repo \
   bash "$HERE/run.sh" --capability-profile dev true 2>&1 || true)"
 if echo "$output" | grep -qi "does not allow data\|cannot be combined"; then
@@ -134,7 +135,7 @@ fi
 
 # ── Test: data-science profile rejects repos ────────────────────────────────
 
-output="$(env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+output="$(env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
   HERMES_REPOS=test-repo \
   bash "$HERE/run.sh" --capability-profile data-science true 2>&1 || true)"
 if echo "$output" | grep -qi "does not allow repository"; then
@@ -148,7 +149,7 @@ fi
 echo
 echo "=== llm-gateway ==="
 # Direct call without HERMES_ANALYSIS should instruct to use analysis.sh.
-output="$(env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+output="$(env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
   bash "$HERE/run.sh" --capability-profile analysis true 2>&1 || true)"
 if echo "$output" | grep -qi "analysis.sh"; then
   pass "analysis profile (direct) redirects to analysis.sh"
@@ -157,7 +158,7 @@ else
 fi
 # With HERMES_ANALYSIS=1, the analysis profile should proceed.
 rm -f "$ARGS_FILE"
-env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
   HERMES_ANALYSIS=1 \
   bash "$HERE/run.sh" --capability-profile analysis true 2>/dev/null || true
 if [ -f "$ARGS_FILE" ] && grep -qF "hermes-analysis" "$ARGS_FILE"; then
@@ -172,7 +173,7 @@ fi
 
 echo
 echo "=== env var contradiction ==="
-output="$(env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+output="$(env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
   HERMES_ANALYSIS=1 \
   bash "$HERE/run.sh" --capability-profile dev true 2>&1 || true)"
 if echo "$output" | grep -qi "contradicts"; then
@@ -186,7 +187,7 @@ fi
 echo
 echo "=== option collision ==="
 rm -f "$ARGS_FILE"
-env PATH="$TMP:$PATH" ARGS_FILE="$ARGS_FILE" \
+env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
   HERMES_REPOS=test-repo \
   bash "$HERE/run.sh" --capability-profile dev --profile my-hermes-profile true 2>/dev/null || true
 if [ -f "$ARGS_FILE" ] && grep -qF -- '--profile' "$ARGS_FILE"; then
