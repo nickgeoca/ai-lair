@@ -217,6 +217,7 @@ echo
 echo "1) DeepSeek V4 Flash — OpenRouter / Novita FP8"
 echo "2) DeepSeek V4 Pro — OpenRouter / Novita FP8"
 echo "3) Kimi K3 — OpenRouter / Moonshot AI"
+echo "4) Tencent Hy3 — OpenRouter / DeepInfra FP8 (\$0.14/M input, \$0.58/M output, \$0.035/M cache read)"
 LOCAL_IDS=()
 LOCAL_LABELS=()
 LOCAL_STATES=()
@@ -231,9 +232,9 @@ else
   echo "Local model profiles hidden: install jq to enable them."
 fi
 for i in "${!LOCAL_IDS[@]}"; do
-  printf '%s) %s [%s]\n' "$((i + 4))" "${LOCAL_LABELS[$i]}" "${LOCAL_STATES[$i]}"
+  printf '%s) %s [%s]\n' "$((i + 5))" "${LOCAL_LABELS[$i]}" "${LOCAL_STATES[$i]}"
 done
-PICKER_CHOICE=$((4 + ${#LOCAL_IDS[@]}))
+PICKER_CHOICE=$((5 + ${#LOCAL_IDS[@]}))
 echo "$PICKER_CHOICE) Hermes provider/model picker (changes the shared saved default)"
 read -r -p "Select [1-$PICKER_CHOICE, default 1]: " CHOICE
 CHOICE="${CHOICE:-1}"
@@ -251,6 +252,10 @@ case "$CHOICE" in
     MODEL=moonshotai/kimi-k3
     ROUTE=moonshotai
     ;;
+  4)
+    MODEL=tencent/hy3
+    ROUTE=deepinfra/fp8
+    ;;
   "$PICKER_CHOICE")
     HERMES_CONTAINER_NAME="$CONTAINER_NAME" \
       "$HERE/run.sh" model
@@ -258,8 +263,8 @@ case "$CHOICE" in
     ;;
   *)
     if [[ "$CHOICE" =~ ^[0-9]+$ ]] &&
-       [ "$CHOICE" -ge 4 ] && [ "$CHOICE" -lt "$PICKER_CHOICE" ]; then
-      index=$((CHOICE - 4))
+       [ "$CHOICE" -ge 5 ] && [ "$CHOICE" -lt "$PICKER_CHOICE" ]; then
+      index=$((CHOICE - 5))
       LOCAL_PROFILE="${LOCAL_IDS[$index]}"
       if ! "$HERE/local-models.sh" compatible "$LOCAL_PROFILE"; then
         echo

@@ -100,8 +100,9 @@ pick-run:
     echo "1) DeepSeek V4 Flash (default) — OpenRouter / Novita FP8"
     echo "2) DeepSeek V4 Pro — OpenRouter / Novita FP8"
     echo "3) Kimi K3 — OpenRouter / Moonshot AI"
-    echo "4) Hermes provider/model picker (changes saved default)"
-    read -r -p "Select [1-4]: " CHOICE
+    echo "4) Tencent Hy3 — OpenRouter / DeepInfra FP8 (\$0.14/M input, \$0.58/M output, \$0.035/M cache read)"
+    echo "5) Hermes provider/model picker (changes saved default)"
+    read -r -p "Select [1-5]: " CHOICE
     case "$CHOICE" in
         1)
             MODEL=deepseek/deepseek-v4-flash
@@ -117,6 +118,11 @@ pick-run:
             RESTORE_ROUTE=novita/fp8
             ;;
         4)
+            MODEL=tencent/hy3
+            ROUTE=deepinfra/fp8
+            RESTORE_ROUTE=novita/fp8
+            ;;
+        5)
             ./run.sh model
             exec ./run.sh --tui
             ;;
@@ -160,8 +166,9 @@ parallel-pick profile:
     echo "1) DeepSeek V4 Flash — OpenRouter / Novita FP8"
     echo "2) DeepSeek V4 Pro — OpenRouter / Novita FP8"
     echo "3) Kimi K3 — OpenRouter / Moonshot AI"
-    echo "4) Hermes provider/model picker (changes this profile's saved default)"
-    read -r -p "Select [1-4]: " CHOICE
+    echo "4) Tencent Hy3 — OpenRouter / DeepInfra FP8 (\$0.14/M input, \$0.58/M output, \$0.035/M cache read)"
+    echo "5) Hermes provider/model picker (changes this profile's saved default)"
+    read -r -p "Select [1-5]: " CHOICE
     case "$CHOICE" in
         1)
             MODEL=deepseek/deepseek-v4-flash
@@ -176,6 +183,10 @@ parallel-pick profile:
             ROUTE=moonshotai
             ;;
         4)
+            MODEL=tencent/hy3
+            ROUTE=deepinfra/fp8
+            ;;
+        5)
             HERMES_CONTAINER_NAME="$CONTAINER_NAME" ./run.sh --profile "$PROFILE" model
             exec env HERMES_CONTAINER_NAME="$CONTAINER_NAME" ./run.sh --profile "$PROFILE" --tui
             ;;

@@ -28,6 +28,10 @@ persistent default Hermes home, so sessions, memories, identity, skills, logs,
 credentials, and configuration are shared. Pressing Enter at the model menu
 selects DeepSeek V4 Flash through OpenRouter's Novita FP8 route.
 
+The Tencent Hy3 preset is pinned to OpenRouter's DeepInfra FP8 route. Its
+provider pricing is $0.14 per million input tokens, $0.58 per million output
+tokens, and $0.035 per million cache-read tokens.
+
 ## Optional local models
 
 The model menu keeps the cloud presets first and appends the declarative local
