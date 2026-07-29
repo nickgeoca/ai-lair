@@ -80,11 +80,13 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 0
 fi
 
-# ── Create minimal directories that run.sh expects ──────────────────────────
+# ── Create isolated test fixtures under $TMP ─────────────────────────────────
 
-mkdir -p "$HERE/repos/test-repo"
-if [ ! -d "$HERE/repos/test-repo/.git" ]; then
-  git -C "$HERE/repos/test-repo" init -q
+# Use a unique repo name to avoid colliding with real disposable clones.
+TEST_REPO="_ct-$$-test"
+mkdir -p "$HERE/repos/$TEST_REPO"
+if [ ! -d "$HERE/repos/$TEST_REPO/.git" ]; then
+  git -C "$HERE/repos/$TEST_REPO" init -q
 fi
 mkdir -p "$HERE/data"
 mkdir -p "$HERE/datasets"
@@ -97,7 +99,7 @@ fi
 # ── Test: dev profile with repos ────────────────────────────────────────────
 
 echo "=== dev profile ==="
-args="$(capture_args "dev with repos" dev HERMES_REPOS=test-repo)"
+args="$(capture_args "dev with repos" dev HERMES_REPOS=$TEST_REPO)"
 
 assert_flag "dev: pasta --no-map-gw" "$args" "no-map-gw"
 assert_flag "dev: repos mounted" "$args" "/workspace/repo"
@@ -125,7 +127,7 @@ assert_no_flag "data-science: no analysis network" "$args" "hermes-analysis"
 echo
 echo "=== profile mount enforcement ==="
 output="$(env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
-  HERMES_DATA_MANIFEST="$DATA_MANIFEST" HERMES_REPOS=test-repo \
+  HERMES_DATA_MANIFEST="$DATA_MANIFEST" HERMES_REPOS=$TEST_REPO \
   bash "$HERE/run.sh" --capability-profile dev true 2>&1 || true)"
 if echo "$output" | grep -qi "does not allow data\|cannot be combined"; then
   pass "dev rejects data manifest"
@@ -136,7 +138,7 @@ fi
 # ── Test: data-science profile rejects repos ────────────────────────────────
 
 output="$(env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
-  HERMES_REPOS=test-repo \
+  HERMES_REPOS=$TEST_REPO \
   bash "$HERE/run.sh" --capability-profile data-science true 2>&1 || true)"
 if echo "$output" | grep -qi "does not allow repository"; then
   pass "data-science rejects repos"
@@ -188,7 +190,7 @@ echo
 echo "=== option collision ==="
 rm -f "$ARGS_FILE"
 env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" HERMES_WRITE_SAFE_ROOT= \
-  HERMES_REPOS=test-repo \
+  HERMES_REPOS=$TEST_REPO \
   bash "$HERE/run.sh" --capability-profile dev --profile my-hermes-profile true 2>/dev/null || true
 if [ -f "$ARGS_FILE" ] && grep -qF -- '--profile' "$ARGS_FILE"; then
   pass "--capability-profile does not consume Hermes --profile"
@@ -200,7 +202,7 @@ fi
 
 # ── Cleanup ─────────────────────────────────────────────────────────────────
 
-rm -rf "$HERE/repos/test-repo/.git" 2>/dev/null || true
+rm -rf "$HERE/repos/$TEST_REPO" 2>/dev/null || true
 
 echo
 echo "=== Results: $PASS passed, $FAIL failed ==="

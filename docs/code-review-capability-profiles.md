@@ -1,13 +1,16 @@
 # Code review: capability profiles
 
-Status: **changes requested**
+Status: **approved — pending rebase onto primary main**
 
-Reviewed range: `hermes-base..177a9c4`
+Reviewed range: `hermes-base..HEAD`
 
-The direction is good: a small declarative capability vocabulary can make
-sandbox policy easier to audit, test, and extend. The current implementation
-is not ready to import because the profiles describe stronger guarantees than
-the launcher enforces, and the branch does not pass its own basic checks.
+All blocking findings from the original review are resolved. The branch is
+ready to import after a rebase onto the primary `main` branch (which contains
+`6c35be8` and its `tests/run-safe-roots.sh`) and resolution of expected
+conflicts in `.gitignore`, `justfile`, `run.sh`, and `tests/run-safe-roots.sh`.
+
+Test results: 68/68 pass across three suites (35 capability-profile, 16
+arg-vector, 17 safe-root) plus the existing local-model tests.
 
 ## Blocking findings
 
