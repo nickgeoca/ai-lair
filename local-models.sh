@@ -10,7 +10,7 @@ NETWORK="${HERMES_LOCAL_NETWORK:-hermes-llm}"
 LOCK_FILE="$RUNTIME_DIR/lifecycle.lock"
 RESERVATION_DIR="$RUNTIME_DIR/reservations"
 SESSION_LABEL="io.hermes.local-session"
-MODEL_LABEL="io.hermes.local-model"
+BACKEND_LABEL="io.hermes.local-backend"
 DOWNLOAD_CONTAINER=""
 
 die() {
@@ -173,8 +173,41 @@ container_compatible() {
       ([$c.Config.Secrets[]? | select(.Name == $secret)] | length == 1) and
       ($c.NetworkSettings.Networks | has($network)) and
       (($c.HostConfig.PortBindings // {}) | length == 0) and
-      ([$c.HostConfig.Devices[]?.PathInContainer | select(startswith("/dev/nvidia"))] |
-        length > 0)
+      (([$c.HostConfig.Devices[]?.PathInContainer |
+          select(startswith("/dev/nvidia"))] | length > 0) or
+       (($c.Config.CreateCommand // []) as $cmd |
+        ($cmd | index("--device")) as $device_index |
+        $device_index != null and
+        $cmd[$device_index + 1] == "nvidia.com/gpu=all"))
+    ' <<<"$inspect" >/dev/null
+}
+
+container_managed_for() {
+  local id="$1" file container image source volume owner inspect
+  file="$(resolve_profile "$id")"
+  container="$(jq -r .container "$file")"
+  image="$(jq -r .image "$file")"
+  source="$(jq -r .model_source "$file")"
+  volume="$(jq -r .volume "$file")"
+  inspect="$(podman inspect "$container" 2>/dev/null)" || return 1
+  owner="$(jq -r --arg label "$BACKEND_LABEL" \
+    '.[0].Config.Labels[$label] // ""' <<<"$inspect")"
+  [ "$owner" = "$id" ] && return 0
+  [ -z "$owner" ] || return 1
+
+  # Backends created before ownership labels were introduced are recognized by
+  # the full Hermes-specific image, model, volume, and isolation signature.
+  jq -e --arg image "$image" --arg source "$source" --arg volume "$volume" '
+      .[0] as $c |
+      $c.ImageName == $image and
+      $c.Args[0:2] == ["-hf", $source] and
+      ([$c.Mounts[] | select(.Type == "volume" and .Name == $volume and
+        .Destination == "/root/.cache")] | length == 1) and
+      (($c.HostConfig.PortBindings // {}) | length == 0) and
+      $c.HostConfig.Privileged == false and
+      $c.HostConfig.ReadonlyRootfs == true and
+      $c.HostConfig.PidsLimit == 512 and
+      ($c.HostConfig.SecurityOpt | index("no-new-privileges") != null)
     ' <<<"$inspect" >/dev/null
 }
 

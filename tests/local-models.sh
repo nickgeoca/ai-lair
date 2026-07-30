@@ -50,4 +50,54 @@ if HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
   exit 1
 fi
 
+# A newly created Podman CDI container records the requested logical device in
+# CreateCommand before its first start. Resolved /dev/nvidia devices are empty
+# until Podman starts it, so compatibility must accept the logical request.
+mkdir -p "$TMP/bin"
+cat > "$TMP/bin/podman" <<'EOF'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  "secret inspect") exit 0 ;;
+  "inspect llama-gemma4") cat "$FAKE_PODMAN_INSPECT" ;;
+  *) exit 1 ;;
+esac
+EOF
+chmod +x "$TMP/bin/podman"
+
+profile="$TMP/local/gemma-4-e4b.json"
+expected_args="$(jq -c '["-hf", .model_source, "--offline"] + .llama_args +
+  ["--no-webui", "--no-agent", "--host", "0.0.0.0", "--port", "8080",
+   "--api-key-file", "/run/secrets/llama-api-key",
+   "--sleep-idle-seconds", "60"]' "$profile")"
+jq -n --arg image "$(jq -r .image "$profile")" \
+  --arg volume "$(jq -r .volume "$profile")" \
+  --arg secret "$(jq -r .secret "$profile")" \
+  --argjson args "$expected_args" '[{
+    ImageName: $image,
+    Args: $args,
+    HostConfig: {
+      ReadonlyRootfs: true,
+      PidsLimit: 512,
+      SecurityOpt: ["no-new-privileges"],
+      PortBindings: {},
+      Devices: []
+    },
+    Mounts: [{
+      Type: "volume", Name: $volume, Destination: "/root/.cache", RW: false
+    }],
+    Config: {
+      Secrets: [{Name: $secret}],
+      CreateCommand: ["podman", "create", "--device", "nvidia.com/gpu=all"]
+    },
+    NetworkSettings: {Networks: {"hermes-llm": {}}}
+  }]' > "$TMP/inspect.json"
+
+FAKE_PODMAN_INSPECT="$TMP/inspect.json" \
+PATH="$TMP/bin:$PATH" \
+HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
+  "$HERE/local-models.sh" compatible gemma-4-e4b || {
+    echo "expected an unstarted NVIDIA CDI backend to be compatible" >&2
+    exit 1
+  }
+
 echo "local-model profile tests passed"
