@@ -27,6 +27,13 @@ case "${1:-}" in
   run) printf '%s\n' "$@" > "${ARGS_FILE:?}" ;;
   exec) exit 0 ;;
   inspect) echo "true" ;;  # pretend container is running for _sandbox
+  network)
+    case "${2:-}" in
+      exists) exit 0 ;;
+      inspect) echo "true" ;;
+      *) exit 0 ;;
+    esac
+    ;;
   *)
     # Pass through anything else quietly.
     ;;
@@ -41,11 +48,15 @@ capture_args() {
   local desc="$1" profile="$2"
   shift 2
   local extra_env=("$@")
+  local profile_args=()
+  if [ -n "$profile" ]; then
+    profile_args=(--capability-profile "$profile")
+  fi
   rm -f "$ARGS_FILE"
   env -i PATH="$TMP:$PATH" HOME="$HOME" ARGS_FILE="$ARGS_FILE" \
     HERMES_WRITE_SAFE_ROOT= \
     "${extra_env[@]}" \
-    bash "$HERE/run.sh" --capability-profile "$profile" true 2>/dev/null || true
+    bash "$HERE/run.sh" "${profile_args[@]}" true 2>/dev/null || true
   if [ -f "$ARGS_FILE" ]; then
     cat "$ARGS_FILE"
   else
@@ -57,7 +68,7 @@ capture_args() {
 
 assert_flag() {
   local desc="$1" args="$2" flag="$3"
-  if echo "$args" | grep -qF "$flag"; then
+  if echo "$args" | grep -qF -- "$flag"; then
     pass "$desc"
   else
     fail "$desc (missing '$flag' in: $args)"
@@ -66,7 +77,7 @@ assert_flag() {
 
 assert_no_flag() {
   local desc="$1" args="$2" flag="$3"
-  if echo "$args" | grep -qF "$flag"; then
+  if echo "$args" | grep -qF -- "$flag"; then
     fail "$desc (unexpected '$flag' in: $args)"
   else
     pass "$desc"
@@ -198,6 +209,28 @@ elif [ -f "$ARGS_FILE" ]; then
   fail "--capability-profile consumed --profile (args: $(tr '\n' ' ' < "$ARGS_FILE"))"
 else
   fail "--capability-profile did not reach podman"
+fi
+
+# ── Test: local profile endpoint overrides stale shared config ───────────────
+
+echo
+echo "=== local model endpoint ==="
+args="$(capture_args "local profile" "" HERMES_LOCAL_PROFILE=gemma-4-e4b)"
+
+assert_flag "local: selected endpoint exported" "$args" \
+  "OPENAI_BASE_URL=http://llama-gemma4:8080/v1"
+assert_flag "local: selected endpoint passed explicitly" "$args" "--base-url"
+assert_flag "local: explicit endpoint value" "$args" \
+  "http://llama-gemma4:8080/v1"
+assert_flag "local: credential uses explicit runtime handoff" "$args" \
+  "target=HERMES_EXPLICIT_API_KEY"
+assert_no_flag "local: credential is not treated as a general OpenAI key" "$args" \
+  "target=OPENAI_API_KEY"
+
+if [ "$(printf '%s\n' "$args" | grep -cF 'http://llama-gemma4:8080/v1')" -ge 2 ]; then
+  pass "local: env and invocation use the same endpoint"
+else
+  fail "local: endpoint was not present in both env and invocation"
 fi
 
 # ── Cleanup ─────────────────────────────────────────────────────────────────

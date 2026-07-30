@@ -344,11 +344,20 @@ if [ -n "$LOCAL_PROFILE" ]; then
     exit 1
   fi
   NET_ARGS=(--network podman --network "$LOCAL_NETWORK")
+  LOCAL_BASE_URL="http://$LOCAL_CONTAINER:8080/v1"
   ENV_ARGS+=(
-    -e "OPENAI_BASE_URL=http://$LOCAL_CONTAINER:8080/v1"
+    -e "OPENAI_BASE_URL=$LOCAL_BASE_URL"
   )
+  # Hermes gives config.yaml precedence over OPENAI_BASE_URL. Pass the
+  # profile-selected endpoint explicitly so a stale saved model cannot route
+  # this session to a different (usually stopped) local backend.
+  set -- "$@" --base-url "$LOCAL_BASE_URL"
   SECRET_ARGS+=(
-    --secret="$LOCAL_SECRET,type=env,target=OPENAI_API_KEY"
+    # Keep the credential separate from OPENAI_API_KEY: Hermes intentionally
+    # will not send that general-purpose key to an arbitrary custom hostname.
+    # The launcher-selected URL and this launcher-selected credential instead
+    # travel as one explicit runtime override.
+    --secret="$LOCAL_SECRET,type=env,target=HERMES_EXPLICIT_API_KEY"
   )
   LABEL_ARGS+=(
     --label io.hermes.local-session=true
