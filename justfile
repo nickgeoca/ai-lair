@@ -33,6 +33,7 @@ test:
     ./tests/capability-profiles.sh
     ./tests/run-capability-args.sh
     ./tests/run-safe-roots.sh
+    ./tests/pdf-tools.sh
     ./tests/local-models.sh
     ./local-models.sh validate
 
