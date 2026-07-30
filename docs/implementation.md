@@ -280,13 +280,14 @@ The `.gitignore` is an allowlist — everything is ignored by default (`/*`).
 Only explicitly reviewed files are un-ignored. All runtime state (`data/`,
 `repos/`, `outbox/`) is correctly excluded.
 
-## Capability profiles as data (work in progress)
+## Capability profiles as data
 
 Capability profiles are declarative JSON files in `profiles/capabilities/`.
 Currently `dev`, `data-science`, and `analysis` profiles are defined and
 validated, and the launcher in `run.sh` enforces mounts, network, model, and
 compute constraints when a profile is active via `--capability-profile`.
-Full enforcement of all schema constraints is still being built out.
+The validator rejects unknown keys, wrong types, unsupported mount modes, and
+inconsistent model/network combinations before runtime state is changed.
 
 ```json
 {
@@ -329,6 +330,12 @@ it, and generates Podman flags deterministically. Profiles are data —
 auditable, diffable, shareable. New modes are new profile files, not new
 shell branches.
 
+Local-model selection in `slot-run.sh` currently clears the cloud-only
+capability profile and uses the legacy, independently validated local-model
+path. Consequently, the statement that capability profiles govern every
+session does not yet extend to local-model launches. Adding a `local-dual`
+capability profile is tracked in `TODO.md`.
+
 ## Cross-cutting concerns
 
 ### Error handling
@@ -342,10 +349,14 @@ network existence, secret presence) before any containers are created.
 `just test` runs:
 1. `bash -n` syntax checks on all `.sh` files
 2. `profile-read.sh validate` — validates all capability profiles against the JSON schema
-3. `tests/local-models.sh` — profile validation, override behavior, reserved argument rejection, safety checks
-4. `local-models.sh validate` — validates all effective local-model profiles against their JSON schema
+3. `tests/capability-profiles.sh` — positive and negative schema, contradiction, and mount-policy tests
+4. `tests/run-capability-args.sh` — asserts the generated Podman argument vectors
+5. `tests/run-safe-roots.sh` — verifies writable mounts and safe-write roots remain aligned
+6. `tests/local-models.sh` — profile overrides, reserved arguments, and safety checks
+7. `local-models.sh validate` — validates all effective local-model profiles against their JSON schema
 
-No integration tests yet (requires a running Podman environment).
+Live-container integration tests are not yet included; they require a running
+rootless Podman environment and prepared images.
 
 ### Portability assumptions
 
@@ -360,17 +371,4 @@ No integration tests yet (requires a running Podman environment).
 - NVIDIA GPU + CDI (for local models)
 - Primary repositories under `~/projects/`
 
-The README calls out that these need to be made configurable before
-wider distribution.
-
-### NixOS integration (planned)
-
-A Nix flake would:
-
-- Declare Podman, just, jq, openssl as build inputs
-- Build the Hermes agent image as a Nix derivation (reproducible)
-- Provide `nix run .#sandbox -- --profile dev --repo my-project`
-- Optionally manage the Podman networks and systemd services for persistent components
-
-The flake is packaging — it doesn't replace Podman as the isolation layer.
-It makes the existing shell scripts reproducible and dependency-declared.
+Portability improvements and optional Nix packaging are tracked in `TODO.md`.
