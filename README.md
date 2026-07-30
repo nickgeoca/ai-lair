@@ -49,8 +49,10 @@ just local-setup qwen-3-6-35b
 Local setup requires `jq`, `openssl`, rootless Podman, and NVIDIA CDI support.
 It creates or validates an internal `hermes-llm` network, a Podman secret, one
 model volume, and a stopped hardened llama.cpp backend. Model weights remain in
-Podman volumes and are never stored in this Git repository. Existing compatible
-containers and cached weights are reused.
+Podman volumes and are never stored in this Git repository. Cached weights are
+verified and reused. Outdated Hermes-managed backend containers are disposable
+and refreshed automatically; setup stops only when the expected container name
+belongs to something Hermes does not manage.
 
 Each tracked JSON profile contains only model metadata and inference arguments;
 it cannot add host mounts, publish ports, or change the fixed container security

@@ -169,7 +169,7 @@ by a JSON profile that follows `profile.schema.json`.
 
 **Container compatibility check** (`container_compatible`):
 - Validates an existing container against its profile using `podman inspect`
-- Checks: image, args, read-only rootfs, pids limit, security opts, mount destinations, secret presence, network membership, port bindings (must be none), GPU device presence
+- Checks: image, args, read-only rootfs, pids limit, security opts, mount destinations, secret presence, network membership, port bindings (must be none), and either resolved NVIDIA devices or the pre-start NVIDIA CDI request
 
 **Backend lifecycle**:
 ```
@@ -190,15 +190,16 @@ release(profile, session)
 ```
 
 **Setup** (`setup_profile`):
-1. Validate profile
-2. Ensure internal network (`hermes-llm`)
-3. Ensure API key secret (`openssl rand -hex 32 | podman secret create`)
-4. Pull llama.cpp image (pinned by SHA256)
-5. Create model volume
-6. Run download container (pasta-only network, downloads GGUF from HuggingFace)
+1. Validate profile and classify the cache and backend independently
+2. Recognize labeled backends and legacy backends with the exact Hermes image,
+   model, volume, and isolation signature; stop on any other name conflict
+3. Ask for confirmation only when the model cache has no substantial data
+4. Ensure internal network (`hermes-llm`) and API key secret
+5. Pull the pinned llama.cpp image when absent and create the model volume
+6. Verify cached data or download/repair it with a pasta-only container
 7. Wait for `/health` (model loaded into VRAM, cache populated)
-8. Stop download container
-9. Create stopped backend container (read-only, offline, internal network, GPU)
+8. Automatically replace an outdated Hermes-managed backend container
+9. Create the stopped backend container (read-only, offline, internal network, GPU)
 
 **Profile override**: Profiles in `local-models.local/` override tracked
 profiles with matching IDs. The `.gitignore` ignores `local-models.local/`.

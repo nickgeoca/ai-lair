@@ -140,6 +140,17 @@ is_installed() {
   podman container exists "$container" 2>/dev/null
 }
 
+model_cache_present() {
+  local id="$1" file volume mountpoint cached_file
+  file="$(resolve_profile "$id")"
+  volume="$(jq -r .volume "$file")"
+  podman volume exists "$volume" 2>/dev/null || return 1
+  mountpoint="$(podman volume inspect -f '{{.Mountpoint}}' "$volume" 2>/dev/null)" || return 1
+  [ -d "$mountpoint" ] || return 1
+  cached_file="$(find "$mountpoint" -type f -size +1M -print -quit 2>/dev/null || true)"
+  [ -n "$cached_file" ]
+}
+
 expected_args_json() {
   local file="$1"
   jq -c '["-hf", .model_source, "--offline"] + .llama_args +
@@ -222,12 +233,16 @@ list_profiles() {
     [[ "$file" == "$LOCAL_DIR/"* ]] && origin=local
     if ! podman container exists "$container" 2>/dev/null; then
       state="not installed"
-    elif container_running "$container"; then
-      state=running
     elif container_compatible "$id"; then
-      state=installed
+      if container_running "$container"; then
+        state=running
+      else
+        state=installed
+      fi
+    elif container_managed_for "$id"; then
+      state="update needed"
     else
-      state=drifted
+      state="name conflict"
     fi
     if [ "$tsv" = "--tsv" ]; then
       printf '%s\t%s\t%s\t%s\n' "$id" "$label" "$state" "$origin"
@@ -263,15 +278,20 @@ cleanup_download() {
 trap cleanup_download EXIT INT TERM
 
 download_profile() {
-  local id="$1" file image source volume
+  local id="$1" cache_present="$2" file label image source volume
   local -a args=()
   file="$(resolve_profile "$id")"
   image="$(jq -r .image "$file")"
+  label="$(jq -r .label "$file")"
   source="$(jq -r .model_source "$file")"
   volume="$(jq -r .volume "$file")"
   mapfile -t args < <(jq -r '.llama_args[]' "$file")
   DOWNLOAD_CONTAINER="hermes-model-download-$id-$$"
-  echo "Downloading or verifying $id model data. This can take a long time..."
+  if [ "$cache_present" = true ]; then
+    echo "Verifying cached $label model data; missing files will be repaired if needed..."
+  else
+    echo "Downloading and verifying $label model data..."
+  fi
   podman run --detach \
     --name "$DOWNLOAD_CONTAINER" \
     --network=pasta:--no-map-gw \
@@ -298,7 +318,11 @@ download_profile() {
       break
     fi
     if ((i % 10 == 0)); then
-      echo "  still downloading/loading ($i seconds)"
+      if [ "$cache_present" = true ]; then
+        echo "  still verifying/loading ($i seconds)"
+      else
+        echo "  still downloading/loading ($i seconds)"
+      fi
     fi
     sleep 1
   done
@@ -320,7 +344,7 @@ create_backend() {
   mapfile -t args < <(jq -r '.llama_args[]' "$file")
   podman create \
     --name "$container" \
-    --label "io.hermes.local-backend=$id" \
+    --label "$BACKEND_LABEL=$id" \
     --network "$NETWORK" \
     --device nvidia.com/gpu=all \
     --read-only \
@@ -340,6 +364,7 @@ create_backend() {
 
 setup_profile() {
   local id="$1" file label image container volume secret size hardware answer
+  local cache_present=false replacing=false
   file="$(resolve_profile "$id")"
   validate_profile "$file" "$id"
   label="$(jq -r .label "$file")"
@@ -355,20 +380,35 @@ setup_profile() {
     return
   fi
 
-  echo "Local model: $label"
-  echo "Image: $image"
-  echo "Estimated model download: $size GiB"
-  echo "Tested hardware: $hardware"
-  echo "Model data will be stored in Podman volume: $volume"
-  local replacing=false
   if podman container exists "$container" 2>/dev/null; then
-    echo "Existing container '$container' differs from this profile."
-    read -r -p "Type REPLACE to preserve its volume and replace only the container: " answer
-    [ "$answer" = REPLACE ] || die "setup cancelled"
-    replacing=true
+    if container_managed_for "$id"; then
+      replacing=true
+    else
+      die "container name '$container' is already in use and is not managed by Hermes; rename or remove it, then retry"
+    fi
+  fi
+
+  if model_cache_present "$id"; then
+    cache_present=true
+  fi
+
+  echo "Local model: $label"
+  echo "Tested hardware: $hardware"
+  if [ "$cache_present" = true ]; then
+    echo "Model cache: Found; it will be verified before use."
   else
-    read -r -p "Type INSTALL to download/configure only this model: " answer
-    [ "$answer" = INSTALL ] || die "setup cancelled"
+    echo "Download required: approximately $size GiB"
+    echo "Storage: Podman-managed model cache"
+    read -r -p "Download and prepare this model? [y/N]: " answer
+    case "$answer" in
+      y|Y|yes|YES|Yes) ;;
+      *) die "setup cancelled" ;;
+    esac
+  fi
+  if [ "$replacing" = true ]; then
+    echo "Updating local runtime configuration..."
+  else
+    echo "Preparing local runtime..."
   fi
 
   ensure_network
@@ -382,14 +422,13 @@ setup_profile() {
   if [ "$replacing" = true ]; then
     podman stop --time 10 "$container" >/dev/null 2>&1 || true
   fi
-  # Running the downloader for every new/replaced backend also repairs a
-  # pre-existing but incomplete cache. Cached profiles return quickly.
-  download_profile "$id"
+  # Verification also repairs a pre-existing but incomplete cache.
+  download_profile "$id" "$cache_present"
   if [ "$replacing" = true ]; then
     podman rm "$container" >/dev/null
   fi
   create_backend "$id"
-  echo "Installed $label. Its backend remains stopped until selected."
+  echo "Ready: $label"
 }
 
 prune_reservations() {
