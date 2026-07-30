@@ -151,26 +151,24 @@ Slot launches always use the modern TUI. Sandbox configuration is versioned in
 this repository. Runtime state, secrets, datasets, outputs, disposable clones,
 slot reservations, and the separate upstream `src/` checkout are ignored.
 
-## Before publishing
+## Project status
 
-This wrapper is currently tailored to one local setup. Before publishing it for
-other people to use:
+This repository is preparing for a v0.5 public preview. The sandbox policy,
+disposable-clone workflow, capability-profile validation, and non-integration
+tests are implemented. Image bootstrapping, clean-clone onboarding, CI, broader
+portability, and live Podman integration coverage remain on the
+[roadmap](TODO.md).
 
-- document prerequisites and the complete first-run setup;
-- document or automate how the pinned `hermes-agent:v2026.7.1` image is built
-  from the separately managed `src/` checkout;
-- document the current platform assumptions: Linux, Bash, rootless Podman with
-  `pasta`, Git, `just`, primary repositories beneath `~/projects`, OpenRouter,
-  and NVIDIA container device support for restricted analysis mode;
-- make the default models, provider routes, primary repository directory, and
-  optional GPU behavior configurable where practical;
-- add a license and a concise security model covering what the sandbox does and
-  does not protect;
-- add continuous integration for the shell and profile validation checks;
-- scan the complete Git history for secrets and private data immediately before
-  attaching a public remote.
+The current implementation targets Linux, Bash, rootless Podman with `pasta`,
+Git, `just`, primary repositories beneath `~/projects`, and OpenRouter.
+Restricted analysis mode and the bundled local-model profiles additionally
+assume NVIDIA CDI support.
 
 NixOS is not currently a runtime requirement: no tracked file refers to NixOS
 or `/etc/nixos`. A Nix flake or NixOS module could later provide a convenient,
 optional way to install the prerequisites, but it should remain separate from
 the portable shell-and-Podman implementation.
+
+## License
+
+Hermes sandbox is available under the [MIT License](LICENSE).

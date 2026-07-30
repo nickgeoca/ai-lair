@@ -6,6 +6,8 @@
 # Public top-level project files.
 !/.gitignore
 !/README.md
+!/LICENSE
+!/TODO.md
 !/justfile
 !/analysis.sh
 !/get-repo.sh
@@ -48,7 +50,6 @@
 /docs/*
 !/docs/design.md
 !/docs/implementation.md
-!/docs/code-review-capability-profiles.md
 
 !/tests/
 /tests/*
