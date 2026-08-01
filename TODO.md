@@ -1,6 +1,6 @@
 # Roadmap
 
-Hermes sandbox is approaching a v0.5 public preview. The policy engine and
+AI Lair is approaching a v0.5 public preview. The Hermes policy engine and
 non-integration test suite are in place; the remaining work is primarily
 release engineering, portability, and end-to-end verification.
 
@@ -14,7 +14,6 @@ release engineering, portability, and end-to-end verification.
   and smoke test without relying on existing Podman or runtime state.
 - Expand `just doctor` diagnostics as clean-host testing reveals additional
   implicit dependencies or unsupported configurations.
-- Add continuous integration that runs `just test` and ShellCheck.
 ## Portability and hardening
 
 - Make the primary checkout root configurable instead of assuming
@@ -35,3 +34,12 @@ release engineering, portability, and end-to-end verification.
   remain usable without Nix.
 - Consider publishing a prebuilt Hermes Agent image after defining the image
   update and supply-chain policy.
+
+## Additional harnesses
+
+- Keep Hermes Agent as the only supported harness for the v0.5 preview.
+- Define a small adapter contract only when implementing a second concrete
+  harness. Preserve the `lair add` and `lair get` boundary regardless of the
+  harness selected.
+- Evaluate [oh-my-pi](https://github.com/can1357/oh-my-pi) as a possible second
+  adapter without including or downloading it in the Hermes-only preview.

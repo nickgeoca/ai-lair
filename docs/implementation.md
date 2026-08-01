@@ -1,4 +1,4 @@
-# Hermes Sandbox — Implementation
+# AI Lair — Implementation
 
 ## File map
 
@@ -11,13 +11,14 @@
   checks.
 
 ```
-sandbox/
+ai-lair/
 ├── README.md                      # User-facing: what, why, quickstart
 ├── docs/
 │   ├── design.md                  # This document's sibling — architecture & threat model
 │   └── implementation.md          # This file
 │
-├── justfile                       # Task runner (just run, just run-repo, just test, …)
+├── lair                           # Public CLI and harness-neutral command vocabulary
+├── justfile                       # Maintenance and compatibility task runner
 │
 ├── bootstrap.sh                   # First-run directories + image preparation
 ├── build-hermes-image.sh          # Pinned upstream image build
@@ -92,7 +93,7 @@ Security invariants it enforces:
 - Slot reservation via flock on `data/slots/.lock`
 - Model picker menu (cloud presets + discovered local profiles)
 - Lifecycle: claims slot → picks model → launches → releases slot on exit
-- Max 16 slots, configurable via `just slots N`
+- Max 16 slots, configurable via `lair slots N`
 
 **`analysis.sh`** — Restricted analysis mode. Orchestrates:
 
@@ -143,7 +144,7 @@ image on the analysis network that confirms:
 The import pipeline that moves agent work from the sandbox back to the host.
 
 ```
-get-repo.sh my-project
+lair get repo my-project
     │
     ├── Validate both disposable (repos/my-project) and primary (~/projects/my-project)
     │   are clean and on branches

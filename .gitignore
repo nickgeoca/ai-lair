@@ -6,12 +6,25 @@
 # Public top-level project files.
 !/.gitignore
 !/.gitleaks.toml
+!/.github/
+/.github/*
+!/.github/ISSUE_TEMPLATE/
+/.github/ISSUE_TEMPLATE/*
+!/.github/ISSUE_TEMPLATE/bug.yml
+!/.github/ISSUE_TEMPLATE/config.yml
+!/.github/ISSUE_TEMPLATE/feature.yml
+!/.github/ISSUE_TEMPLATE/portability.yml
+!/.github/pull_request_template.md
+!/.github/workflows/
+/.github/workflows/*
+!/.github/workflows/test.yml
 !/CONTRIBUTING.md
 !/README.md
 !/SECURITY.md
 !/LICENSE
 !/TODO.md
 !/justfile
+!/lair
 !/analysis.sh
 !/bootstrap.sh
 !/build-hermes-image.sh
@@ -66,12 +79,13 @@
 !/docs/implementation.md
 !/docs/code-review-capability-profiles.md
 !/docs/open-source-release-plan.md
+!/docs/publication-audit.md
 
 !/tests/
 /tests/*
 !/tests/local-models.sh
+!/tests/lair.sh
 !/tests/run-safe-roots.sh
 !/tests/capability-profiles.sh
-!/tests/pdf-tools.sh
 !/tests/run-capability-args.sh
 !/tests/release-tools.sh

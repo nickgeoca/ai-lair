@@ -1,0 +1,290 @@
+#!/usr/bin/env bash
+# AI Lair CLI. Hermes Agent is the only supported harness in this release.
+set -euo pipefail
+
+HERE="$(dirname "$(readlink -f "$0")")"
+REPOS_DIR="${HERMES_REPOS_DIR:-$HERE/repos}"
+PRIMARY_DIR="${HERMES_PRIMARY_DIR:-$HOME/projects}"
+OUTBOX_DIR="${AI_LAIR_OUTBOX_DIR:-$HERE/outbox}"
+VERSION="0.5.0-preview"
+
+usage() {
+  cat <<'EOF'
+AI Lair — isolated workspaces for AI agent harnesses
+
+Hermes Agent is the only supported harness in this release.
+
+Usage:
+  lair                              Open Hermes with no project or data access
+  lair add repo REPO [REPO ...]    Open with persistent disposable repo clones
+  lair add data PATH [PATH ...]    Open with ephemeral read-only data access
+  lair get                          List work tracked by the lair
+  lair get repo REPO [REPO ...]    Review and import committed repo work
+  lair status                       Show session slot status
+  lair slots [COUNT]                Show or set the parallel session limit
+  lair setup                        Configure Hermes for first use
+  lair model                        Select the Hermes provider and model
+  lair doctor                       Check host and runtime prerequisites
+  lair completions SHELL            Print completions for bash, zsh, or fish
+  lair version                      Print the AI Lair version
+
+Repository clones and Hermes state persist between sessions. Data mounts exist
+only for the launched session. Files written to the outbox are already visible
+on the host and are shown by `lair get` for discoverability.
+EOF
+}
+
+repo_marker() {
+  local clone="$1"
+  if git -C "$clone" rev-parse --verify refs/hermes/imported >/dev/null 2>&1; then
+    printf '%s\n' refs/hermes/imported
+  elif git -C "$clone" rev-parse --verify 'hermes-base^{commit}' >/dev/null 2>&1; then
+    printf '%s\n' hermes-base
+  else
+    return 1
+  fi
+}
+
+list_repositories() {
+  local found=false clone name top marker count dirty
+  echo "Repositories"
+  shopt -s nullglob
+  for clone in "$REPOS_DIR"/*; do
+    [ -d "$clone" ] || continue
+    found=true
+    name="$(basename "$clone")"
+    top="$(git -C "$clone" rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -z "$top" ] || [ "$(readlink -f "$top" 2>/dev/null || true)" != "$(readlink -f "$clone")" ]; then
+      printf '  %-24s invalid disposable clone\n' "$name"
+      continue
+    fi
+    dirty="$(git -C "$clone" status --porcelain)"
+    marker="$(repo_marker "$clone" || true)"
+    if [ -z "$marker" ]; then
+      printf '  %-24s missing import marker\n' "$name"
+    elif ! git -C "$clone" merge-base --is-ancestor "$marker" HEAD 2>/dev/null; then
+      printf '  %-24s import marker diverged\n' "$name"
+    else
+      count="$(git -C "$clone" rev-list --count "$marker"..HEAD)"
+      if [ -n "$dirty" ]; then
+        printf '  %-24s %s committed, plus uncommitted work\n' "$name" "$count"
+      elif [ "$count" -eq 0 ]; then
+        printf '  %-24s up to date\n' "$name"
+      elif [ "$count" -eq 1 ]; then
+        printf '  %-24s 1 commit ready\n' "$name"
+      else
+        printf '  %-24s %s commits ready\n' "$name" "$count"
+      fi
+    fi
+  done
+  if [ "$found" = false ]; then
+    echo "  (none)"
+  fi
+}
+
+list_outbox() {
+  local found=false item name
+  echo
+  echo "Host-visible outbox ($OUTBOX_DIR)"
+  if [ -d "$OUTBOX_DIR" ]; then
+    shopt -s nullglob dotglob
+    for item in "$OUTBOX_DIR"/*; do
+      found=true
+      name="$(basename "$item")"
+      if [ -d "$item" ]; then
+        printf '  %s/\n' "$name"
+      else
+        printf '  %s\n' "$name"
+      fi
+    done
+  fi
+  if [ "$found" = false ]; then
+    echo "  (none)"
+  fi
+}
+
+list_inventory() {
+  echo "AI Lair inventory"
+  echo
+  list_repositories
+  list_outbox
+  echo
+  echo "Use 'lair get repo NAME' to review and import committed work."
+}
+
+complete_add_repos() {
+  local path top
+  [ -d "$PRIMARY_DIR" ] || return 0
+  shopt -s nullglob
+  for path in "$PRIMARY_DIR"/*; do
+    top="$(git -C "$path" rev-parse --show-toplevel 2>/dev/null || true)"
+    [ -n "$top" ] || continue
+    [ "$(readlink -f "$top" 2>/dev/null || true)" = "$(readlink -f "$path")" ] || continue
+    basename "$path"
+  done
+}
+
+complete_get_repos() {
+  local path top
+  [ -d "$REPOS_DIR" ] || return 0
+  shopt -s nullglob
+  for path in "$REPOS_DIR"/*; do
+    top="$(git -C "$path" rev-parse --show-toplevel 2>/dev/null || true)"
+    [ -n "$top" ] || continue
+    [ "$(readlink -f "$top" 2>/dev/null || true)" = "$(readlink -f "$path")" ] || continue
+    basename "$path"
+  done
+}
+
+print_bash_completions() {
+  cat <<'EOF'
+_ai_lair_complete() {
+  local cur="${COMP_WORDS[COMP_CWORD]}"
+  local first="${COMP_WORDS[1]:-}"
+  local second="${COMP_WORDS[2]:-}"
+  local choices=""
+  if [ "$COMP_CWORD" -eq 1 ]; then
+    choices="add get status slots setup model doctor completions version help"
+  elif [ "$COMP_CWORD" -eq 2 ] && { [ "$first" = add ] || [ "$first" = get ]; }; then
+    choices="repo"
+    [ "$first" = add ] && choices="repo data"
+  elif [ "$first" = add ] && [ "$second" = repo ]; then
+    choices="$("${COMP_WORDS[0]}" __complete add-repo)"
+  elif [ "$first" = get ] && [ "$second" = repo ]; then
+    choices="$("${COMP_WORDS[0]}" __complete get-repo)"
+  elif [ "$first" = completions ] && [ "$COMP_CWORD" -eq 2 ]; then
+    choices="bash zsh fish"
+  fi
+  COMPREPLY=( $(compgen -W "$choices" -- "$cur") )
+}
+complete -F _ai_lair_complete lair ./lair
+EOF
+}
+
+print_zsh_completions() {
+  cat <<'EOF'
+#compdef lair
+_ai_lair() {
+  local -a commands kinds repos
+  commands=(add get status slots setup model doctor completions version help)
+  if (( CURRENT == 2 )); then
+    _describe command commands
+  elif [[ $words[2] == add && CURRENT == 3 ]]; then
+    _values kind repo data
+  elif [[ $words[2] == get && CURRENT == 3 ]]; then
+    _values kind repo
+  elif [[ $words[2] == add && $words[3] == repo ]]; then
+    repos=(${(f)"$($words[1] __complete add-repo)"})
+    _describe repository repos
+  elif [[ $words[2] == get && $words[3] == repo ]]; then
+    repos=(${(f)"$($words[1] __complete get-repo)"})
+    _describe repository repos
+  elif [[ $words[2] == add && $words[3] == data ]]; then
+    _files
+  elif [[ $words[2] == completions && CURRENT == 3 ]]; then
+    _values shell bash zsh fish
+  fi
+}
+compdef _ai_lair lair
+EOF
+}
+
+print_fish_completions() {
+  cat <<'EOF'
+complete -c lair -f
+complete -c lair -n '__fish_use_subcommand' -a add -d 'Bring a repository or data into the lair'
+complete -c lair -n '__fish_use_subcommand' -a get -d 'List or retrieve work from the lair'
+complete -c lair -n '__fish_use_subcommand' -a 'status slots setup model doctor completions version help'
+complete -c lair -n '__fish_seen_subcommand_from add; and not __fish_seen_subcommand_from repo data' -a 'repo data'
+complete -c lair -n '__fish_seen_subcommand_from get; and not __fish_seen_subcommand_from repo' -a repo
+complete -c lair -n '__fish_seen_subcommand_from add; and __fish_seen_subcommand_from repo' -a '(lair __complete add-repo)'
+complete -c lair -n '__fish_seen_subcommand_from get; and __fish_seen_subcommand_from repo' -a '(lair __complete get-repo)'
+complete -c lair -n '__fish_seen_subcommand_from completions' -a 'bash zsh fish'
+EOF
+}
+
+command_name="${1:-}"
+if [ "$#" -eq 0 ]; then
+  exec "$HERE/slot-run.sh" run
+fi
+shift
+
+case "$command_name" in
+  add)
+    kind="${1:-}"
+    [ "$#" -gt 0 ] && shift
+    case "$kind" in
+      repo|data)
+        [ "$#" -gt 0 ] || { echo "lair add $kind requires at least one item" >&2; exit 2; }
+        exec "$HERE/slot-run.sh" "$kind" "$@"
+        ;;
+      *)
+        echo "usage: lair add {repo|data} ITEM [ITEM ...]" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  get)
+    if [ "$#" -eq 0 ]; then
+      list_inventory
+      exit
+    fi
+    kind="$1"
+    shift
+    case "$kind" in
+      repo)
+        [ "$#" -gt 0 ] || { echo "lair get repo requires at least one repository" >&2; exit 2; }
+        exec "$HERE/get-repo.sh" "$@"
+        ;;
+      *)
+        echo "usage: lair get [repo REPO [REPO ...]]" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  status)
+    [ "$#" -eq 0 ] || { echo "usage: lair status" >&2; exit 2; }
+    exec "$HERE/slot-run.sh" status
+    ;;
+  slots)
+    [ "$#" -le 1 ] || { echo "usage: lair slots [COUNT]" >&2; exit 2; }
+    exec "$HERE/slot-run.sh" slots "$@"
+    ;;
+  setup|model)
+    [ "$#" -eq 0 ] || { echo "usage: lair $command_name" >&2; exit 2; }
+    exec "$HERE/run.sh" "$command_name"
+    ;;
+  doctor)
+    [ "$#" -eq 0 ] || { echo "usage: lair doctor" >&2; exit 2; }
+    exec "$HERE/doctor.sh"
+    ;;
+  completions)
+    [ "$#" -eq 1 ] || { echo "usage: lair completions {bash|zsh|fish}" >&2; exit 2; }
+    case "$1" in
+      bash) print_bash_completions ;;
+      zsh) print_zsh_completions ;;
+      fish) print_fish_completions ;;
+      *) echo "unsupported shell: $1" >&2; exit 2 ;;
+    esac
+    ;;
+  version|--version|-V)
+    [ "$#" -eq 0 ] || { echo "usage: lair version" >&2; exit 2; }
+    echo "AI Lair $VERSION (Hermes harness)"
+    ;;
+  help|--help|-h)
+    usage
+    ;;
+  __complete)
+    [ "$#" -eq 1 ] || exit 0
+    case "$1" in
+      add-repo) complete_add_repos ;;
+      get-repo) complete_get_repos ;;
+    esac
+    ;;
+  *)
+    echo "unknown command: $command_name" >&2
+    echo >&2
+    usage >&2
+    exit 2
+    ;;
+esac

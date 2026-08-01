@@ -22,6 +22,10 @@ bootstrap option="":
 run:
     ./slot-run.sh run
 
+# use the public AI Lair CLI; for example: just lair add repo example-api
+lair *args:
+    ./lair {{ args }}
+
 # set the maximum parallel slot count, or show slot status when omitted
 slots count="":
     ./slot-run.sh slots {{ quote(count) }}
@@ -40,12 +44,12 @@ local-setup profile:
 
 # run syntax and profile checks without downloading models
 test:
-    bash -n ./*.sh ./tests/*.sh
+    bash -n ./lair ./*.sh ./tests/*.sh
+    ./tests/lair.sh
     ./profile-read.sh validate
     ./tests/capability-profiles.sh
     ./tests/run-capability-args.sh
     ./tests/run-safe-roots.sh
-    ./tests/pdf-tools.sh
     ./tests/local-models.sh
     ./tests/release-tools.sh
     ./local-models.sh validate

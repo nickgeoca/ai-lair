@@ -1,7 +1,21 @@
-# Hermes sandbox
+# AI Lair
 
-Rootless Podman wrapper for running Hermes without exposing the host home
-directory, credentials, Podman socket, or unrelated project checkouts.
+An isolated workspace for AI agent harnesses. Bring in only the repositories or
+data an agent needs, then review what comes back.
+
+AI Lair currently supports **Hermes Agent only**. The CLI is intentionally
+harness-neutral so additional adapters can be added later without changing the
+repository and data boundary:
+
+```text
+lair add ...   host -> lair
+lair get ...   lair -> host
+```
+
+Under the hood, the current adapter is a rootless Podman wrapper for running
+Hermes without exposing the host home directory, host credentials, Podman
+socket, or unrelated project checkouts. AI Lair is an independent project and
+is not affiliated with or endorsed by Nous Research.
 
 This is an experimental Linux preview for technical users. The supported path
 requires Bash 4+, Git, `just`, `jq`, OpenSSL, rootless Podman, and `pasta`.
@@ -14,10 +28,10 @@ Clone the repository, then build the exact Hermes Agent revision selected by
 the sandbox:
 
 ```bash
-git clone <public-repository-url> hermes-sandbox
-cd hermes-sandbox
+git clone <public-repository-url> ai-lair
+cd ai-lair
 just bootstrap
-just doctor
+./lair doctor
 ```
 
 `bootstrap` creates the ignored runtime directories and builds
@@ -27,36 +41,44 @@ patch before building. The upstream checkout is temporary and is removed when
 the build finishes. Use `just bootstrap --rebuild` to replace an existing
 image.
 
-Configure OpenRouter inside the persistent sandbox home, then launch the first
-session:
+Configure OpenRouter inside the persistent lair home, then launch the first
+session with no project or data access:
 
 ```bash
-just setup
-just run
+./lair setup
+./lair
 ```
 
-`just doctor` is read-only. It reports missing host commands, an unusable or
+`lair doctor` is read-only. It reports missing host commands, an unusable or
 non-rootless Podman service, a missing or mismatched Hermes image, and missing
 runtime directories. Image construction downloads upstream source, base
 images, operating-system packages, and application dependencies.
 
-Run commands from this directory:
+The examples use `./lair` so they work directly from a clone. Add the checkout
+to `PATH` or symlink this file into a directory already on `PATH` to invoke it
+as simply `lair`.
+
+Once `lair` is on `PATH`, inspect the complete command surface and enable
+optional shell completions:
 
 ```bash
-cd ~/sandboxes/hermes
-just --list
+lair --help
+eval "$(lair completions bash)"       # current Bash session
+eval "$(lair completions zsh)"        # current Zsh session
+lair completions fish > ~/.config/fish/completions/lair.fish
 ```
 
 ## Everyday commands
 
 ```bash
-just slots 4                      # allow up to four parallel Hermes sessions
-just status                       # show running and available slots
-just run                          # no project or data access
-just run-repo example-api         # one disposable project clone
-just run-repo example-api example-web
-just run-data ~/Downloads/paper.pdf
-just capability-profiles          # list available capability profiles
+./lair slots 4                         # allow four parallel sessions
+./lair status                          # show running and available slots
+./lair                                 # no project or data access
+./lair add repo example-api            # one disposable project clone
+./lair add repo example-api example-web
+./lair add data ~/Downloads/paper.pdf  # ephemeral, read-only access
+./lair get                             # list tracked work and outbox items
+./lair get repo example-api            # review and import commits
 ```
 
 Each launch claims the lowest available slot, opens the model/provider menu,
@@ -113,7 +135,7 @@ isolation. They still receive no host home, Podman socket, or unrelated mounts.
 
 ## Parallel-session safety
 
-This sandbox uses one persistent Hermes home shared by multiple disposable
+AI Lair uses one persistent Hermes home shared by multiple disposable
 container slots. Slots are runtime capacity only: sessions, memories, identity,
 skills, provider settings, and conversation history all belong to the shared
 Hermes home. Consequently, `/resume` and session search see the same global
@@ -128,7 +150,7 @@ session may require starting a new session or reloading before they appear.
 Legacy `slot-*` profiles created by older versions of this wrapper are left
 untouched beneath `data/profiles/`, but new launches no longer use them.
 
-`run-repo` creates a disposable clone from
+`lair add repo` creates a disposable clone from
 `~/projects/<name>` when one is missing. The primary checkout must be clean so
 uncommitted work is never silently omitted. Existing disposable clones are
 reused; starting Hermes never deletes them.
@@ -156,21 +178,22 @@ claiming that one is missing.
 
 The `repos/` parent directory itself is never mounted.
 
-`run-data` accepts files or directories, including paths with spaces. Only the
-selected paths are mounted, read-only, beneath `/workspace/data`. Hermes retains
-normal Internet access in this mode, so selected content may be sent to remote
-services. Generated files belong in `/workspace/outbox`, which maps to the
-host's `outbox/` directory. Repository and data mounts are intentionally not
-combined.
+`lair add data` accepts files or directories, including paths with spaces. Only
+the selected paths are mounted, read-only, beneath `/workspace/data`. Hermes
+retains normal Internet access in this mode, so selected content may be sent to
+remote services. Generated files belong in `/workspace/outbox`, which maps to
+the host's `outbox/` directory. Repository and data mounts are intentionally
+not combined.
 
 ## Review and bring work back
 
 ```bash
-just get-repo example-api
-just get-repo example-api example-web
+./lair get
+./lair get repo example-api
+./lair get repo example-api example-web
 ```
 
-`get-repo` preflights every named repository before changing anything. It:
+`lair get repo` preflights every named repository before changing anything. It:
 
 - requires both disposable and primary checkouts to be clean;
 - requires each primary checkout to be on a branch, not detached HEAD;
@@ -179,7 +202,7 @@ just get-repo example-api example-web
 - cherry-picks new disposable commits onto each primary's current branch;
 - records an incremental marker so later imports include only newer commits.
 
-Hermes must commit useful work inside each disposable clone before import.
+The harness must commit useful work inside each disposable clone before import.
 Disposable clones are retained after import.
 
 ## Interface and maintenance
@@ -190,18 +213,19 @@ Common configuration is available from:
 just options
 ```
 
-Slot launches always use the modern TUI. Sandbox configuration is versioned in
+Slot launches always use the modern TUI. AI Lair configuration is versioned in
 this repository. Runtime state, secrets, datasets, outputs, disposable clones,
 slot reservations, and the separate upstream `src/` checkout are ignored.
 
 ## Project status
 
-This repository is preparing for a v0.5 public preview. The sandbox policy,
+AI Lair is preparing for a v0.5 public preview. The sandbox policy,
 disposable-clone workflow, capability-profile validation, and non-integration
 tests are implemented. The source-pinned image/bootstrap path and clean-clone
 instructions are also implemented but still require verification on a clean
-supported host. CI, broader portability, and live Podman integration coverage
-remain on the [roadmap](TODO.md).
+supported host. CI runs the non-integration suite and ShellCheck; broader
+portability and live Podman integration coverage remain on the
+[roadmap](TODO.md).
 
 The current implementation targets Linux, Bash 4+, rootless Podman with
 `pasta`, Git, `just`, `jq`, OpenSSL, primary repositories beneath `~/projects`,
@@ -223,4 +247,4 @@ issue containing sensitive details.
 
 ## License
 
-Hermes sandbox is available under the [MIT License](LICENSE).
+AI Lair is available under the [MIT License](LICENSE).

@@ -1,0 +1,22 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Install test dependencies
+        run: sudo apt-get update && sudo apt-get install --yes jq just shellcheck
+      - name: Run non-integration suite
+        run: just test
+      - name: Run ShellCheck
+        run: shellcheck -x ./*.sh ./lair ./tests/*.sh
+      - name: Check whitespace
+        run: git diff --check

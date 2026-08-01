@@ -1,4 +1,4 @@
-# Hermes Sandbox — Design
+# AI Lair — Design
 
 ## What this is
 
@@ -65,7 +65,7 @@ profile into Podman runtime flags.
 │        │ clone (ro)     │ mount (ro)      │ mount (rw)  │
 │        ▼                ▼                 ▼             │
 │  ┌─────────────────────────────────────────────────┐    │
-│  │  Hermes Sandbox Container (rootless Podman)     │    │
+│  │  AI Lair: Hermes container (rootless Podman)    │    │
 │  │  uid=10000  no-new-privileges  pids-limit=2048 │    │
 │  │                                                 │    │
 │  │  /workspace/repo      (disposable clone, rw)    │    │
@@ -119,7 +119,7 @@ Disposable clone (repos/foo)
     │ Agent cannot see ~/projects or any other clone
     │
     ▼
-Human runs: just get-repo foo
+Human runs: lair get repo foo
     ├── Preflight: both checkouts clean? Primary on a branch?
     ├── Review: shows commits, changed files
     ├── Confirm: explicit "IMPORT" prompt
@@ -170,3 +170,16 @@ possible without architectural changes.
 
 6. **The LLM is not the threat.** The inference backend runs read-only,
    offline, with no tools. The agent is the threat. Contain the agent.
+
+## Layer ownership
+
+AI Lair owns the boundary around a harness: selected mounts, network policy,
+compute access, persistent harness state, disposable repository clones, and
+reviewed retrieval. A harness adapter owns only the wiring needed to configure
+and launch that harness inside the boundary.
+
+Agent tools, prompts, document extraction, browser behavior, LSP integration,
+subagents, and other tool-surface features belong to the harness itself. AI
+Lair should test those features only when it makes an explicit compatibility
+promise, and then against the built adapter image rather than an ignored
+upstream source checkout.
