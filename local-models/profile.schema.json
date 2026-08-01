@@ -13,8 +13,8 @@
     "volume",
     "secret",
     "download_gib",
-    "vram_mib",
     "tested_hardware",
+    "context",
     "llama_args"
   ],
   "properties": {
@@ -30,8 +30,30 @@
     "volume": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$" },
     "secret": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$" },
     "download_gib": { "type": "number", "exclusiveMinimum": 0 },
-    "vram_mib": { "type": "integer", "minimum": 0 },
     "tested_hardware": { "type": "string", "minLength": 1 },
+    "context": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "target_free_mib", "minimum_tokens"],
+          "properties": {
+            "mode": { "const": "fit" },
+            "target_free_mib": { "type": "integer", "minimum": 0 },
+            "minimum_tokens": { "type": "integer", "minimum": 512 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode", "tokens"],
+          "properties": {
+            "mode": { "const": "fixed" },
+            "tokens": { "type": "integer", "minimum": 512 }
+          }
+        }
+      ]
+    },
     "llama_args": {
       "type": "array",
       "items": { "type": "string" }

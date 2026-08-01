@@ -8,12 +8,14 @@
   "volume": "llama-qwen36-models",
   "secret": "llama-qwen36-api-key",
   "download_gib": 19.1,
-  "vram_mib": 7468,
   "tested_hardware": "NVIDIA RTX 5070 Laptop GPU with 8 GiB VRAM",
+  "context": {
+    "mode": "fit",
+    "target_free_mib": 512,
+    "minimum_tokens": 32768
+  },
   "llama_args": [
     "-ncmoe", "32",
-    "-ngl", "all",
-    "-c", "65536",
     "-np", "1",
     "-fa", "on",
     "-ctk", "q8_0",

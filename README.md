@@ -60,6 +60,12 @@ policy. Add or remove one JSON file to contribute a public model. Put private
 profiles in the ignored `local-models.local/` directory; a matching local ID
 overrides its tracked profile.
 
+Tracked models let llama.cpp fit the largest native context that preserves a
+512 MiB device-memory margin, using one inference slot with a 32k minimum.
+Gemma's and Qwen's model weights are Q4-quantized; their independently growing
+KV caches use Q8_0. The selected context depends on free GPU memory at load time
+and is printed when the backend starts.
+
 Normal, repository, and data launches can use local profiles. Multiple Hermes
 slots may share the same local backend, but a different local model is refused
 while one is reserved. The backend stops after the last matching Hermes session

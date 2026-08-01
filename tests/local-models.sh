@@ -27,6 +27,30 @@ if HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
 fi
 rm "$TMP/local/gemma-4-e4b.json"
 
+jq '.llama_args += ["-c", "65536"]' "$TMP/catalog/gemma-4-e4b.json" \
+  > "$TMP/local/gemma-4-e4b.json"
+if HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
+  "$HERE/local-models.sh" validate >/dev/null 2>&1; then
+  echo "expected reserved context argument validation to fail" >&2
+  exit 1
+fi
+rm "$TMP/local/gemma-4-e4b.json"
+
+jq '.context.target_free_mib = 512.5' "$TMP/catalog/gemma-4-e4b.json" \
+  > "$TMP/local/gemma-4-e4b.json"
+if HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
+  "$HERE/local-models.sh" validate >/dev/null 2>&1; then
+  echo "expected fractional fit target validation to fail" >&2
+  exit 1
+fi
+rm "$TMP/local/gemma-4-e4b.json"
+
+jq '.context = {"mode":"fixed","tokens":8192}' \
+  "$TMP/catalog/gemma-4-e4b.json" > "$TMP/local/gemma-4-e4b.json"
+HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
+  "$HERE/local-models.sh" validate >/dev/null
+rm "$TMP/local/gemma-4-e4b.json"
+
 jq '.label = "Private override"' "$TMP/catalog/gemma-4-e4b.json" \
   > "$TMP/local/gemma-4-e4b.json"
 actual="$(HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
@@ -66,6 +90,9 @@ chmod +x "$TMP/bin/podman"
 
 profile="$TMP/local/gemma-4-e4b.json"
 expected_args="$(jq -c '["-hf", .model_source, "--offline"] + .llama_args +
+  ["--fit", "on",
+   "--fit-target", (.context.target_free_mib | tostring),
+   "--fit-ctx", (.context.minimum_tokens | tostring)] +
   ["--no-webui", "--no-agent", "--host", "0.0.0.0", "--port", "8080",
    "--api-key-file", "/run/secrets/llama-api-key",
    "--sleep-idle-seconds", "60"]' "$profile")"
@@ -97,7 +124,7 @@ PATH="$TMP/bin:$PATH" \
 HERMES_MODEL_CATALOG="$TMP/catalog" HERMES_LOCAL_MODEL_DIR="$TMP/local" \
   "$HERE/local-models.sh" compatible gemma-4-e4b || {
     echo "expected an unstarted NVIDIA CDI backend to be compatible" >&2
-    exit 1
-  }
+  exit 1
+}
 
 echo "local-model profile tests passed"

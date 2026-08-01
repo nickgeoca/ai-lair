@@ -62,8 +62,8 @@ validate_profile() {
     type == "object" and
     ((keys | sort) == ([
       "container", "download_gib", "hermes_model", "id", "image",
-      "label", "llama_args", "model_source", "secret",
-      "tested_hardware", "volume", "vram_mib"
+      "context", "label", "llama_args", "model_source", "secret",
+      "tested_hardware", "volume"
     ] | sort)) and
     .id == $id and (.id | test("^[a-z0-9][a-z0-9-]{0,62}$")) and
     ([.label, .hermes_model, .image, .model_source, .container, .volume,
@@ -73,7 +73,16 @@ validate_profile() {
     ([.container, .volume, .secret] |
       all(test("^[A-Za-z0-9][A-Za-z0-9_.-]*$"))) and
     (.download_gib | type == "number" and . > 0) and
-    (.vram_mib | type == "number" and . >= 0 and floor == .) and
+    (
+      (.context.mode == "fit" and
+       (.context | keys | sort) == ["minimum_tokens", "mode", "target_free_mib"] and
+       (.context.target_free_mib | type == "number" and floor == . and . >= 0) and
+       (.context.minimum_tokens | type == "number" and floor == . and . >= 512))
+      or
+      (.context.mode == "fixed" and
+       (.context | keys | sort) == ["mode", "tokens"] and
+       (.context.tokens | type == "number" and floor == . and . >= 512))
+    ) and
     (.llama_args | type == "array" and all(type == "string" and
       (contains("\\n") | not) and (contains("\\t") | not)))
   ' "$file" >/dev/null || die "invalid local-model profile: $file"
@@ -83,7 +92,9 @@ validate_profile() {
       -hf|-hf=*|--hf-repo|--hf-repo=*|--host|--host=*|--port|--port=*|\
       --api-key|--api-key=*|--api-key-file|--api-key-file=*|--offline|\
       --offline=*|--sleep-idle-seconds|--sleep-idle-seconds=*|--webui|\
-      --no-webui|--agent|--no-agent)
+      --no-webui|--agent|--no-agent|-c|-c=*|--ctx-size|--ctx-size=*|\
+      -fit|-fit=*|--fit|--fit=*|-fitt|-fitt=*|--fit-target|\
+      --fit-target=*|-fitc|-fitc=*|--fit-ctx|--fit-ctx=*)
         die "profile $expected_id uses launcher-reserved argument: $arg"
         ;;
     esac
@@ -121,7 +132,7 @@ profile_field() {
   local id="$1" field="$2" file
   case "$field" in
     id|label|hermes_model|image|model_source|container|volume|secret|\
-    download_gib|vram_mib|tested_hardware|llama_args) ;;
+    download_gib|tested_hardware|context|llama_args) ;;
     *) die "unknown local-model profile field: $field" ;;
   esac
   file="$(resolve_profile "$id")"
@@ -132,6 +143,15 @@ profile_field() {
 container_running() {
   local container="$1"
   [ "$(podman inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true)" = "true" ]
+}
+
+backend_context_value() {
+  local container="$1" props
+  props="$(podman exec "$container" sh -c \
+    'exec curl -fsS -H "Authorization: Bearer $(sed -n "1p" /run/secrets/llama-api-key)" http://127.0.0.1:8080/props')" ||
+    return 1
+  jq -er '.default_generation_settings.n_ctx |
+    select(type == "number" and floor == . and . > 0)' <<<"$props"
 }
 
 is_installed() {
@@ -151,12 +171,28 @@ model_cache_present() {
   [ -n "$cached_file" ]
 }
 
-expected_args_json() {
+runtime_args_json() {
   local file="$1"
-  jq -c '["-hf", .model_source, "--offline"] + .llama_args +
+  jq -c '
+    .llama_args +
+    if .context.mode == "fit" then
+      ["--fit", "on",
+       "--fit-target", (.context.target_free_mib | tostring),
+       "--fit-ctx", (.context.minimum_tokens | tostring)]
+    else
+      ["--fit", "off", "--ctx-size", (.context.tokens | tostring)]
+    end
+  ' "$file"
+}
+
+expected_args_json() {
+  local file="$1" runtime
+  runtime="$(runtime_args_json "$file")"
+  jq -cn --arg source "$(jq -r .model_source "$file")" --argjson runtime "$runtime" '
+    ["-hf", $source, "--offline"] + $runtime +
     ["--no-webui", "--no-agent", "--host", "0.0.0.0", "--port", "8080",
      "--api-key-file", "/run/secrets/llama-api-key",
-     "--sleep-idle-seconds", "60"]' "$file"
+     "--sleep-idle-seconds", "60"]'
 }
 
 container_compatible() {
@@ -285,7 +321,7 @@ download_profile() {
   label="$(jq -r .label "$file")"
   source="$(jq -r .model_source "$file")"
   volume="$(jq -r .volume "$file")"
-  mapfile -t args < <(jq -r '.llama_args[]' "$file")
+  mapfile -t args < <(runtime_args_json "$file" | jq -r '.[]')
   DOWNLOAD_CONTAINER="hermes-model-download-$id-$$"
   if [ "$cache_present" = true ]; then
     echo "Verifying cached $label model data; missing files will be repaired if needed..."
@@ -341,7 +377,7 @@ create_backend() {
   container="$(jq -r .container "$file")"
   volume="$(jq -r .volume "$file")"
   secret="$(jq -r .secret "$file")"
-  mapfile -t args < <(jq -r '.llama_args[]' "$file")
+  mapfile -t args < <(runtime_args_json "$file" | jq -r '.[]')
   podman create \
     --name "$container" \
     --label "$BACKEND_LABEL=$id" \
@@ -458,7 +494,8 @@ active_profile_conflict() {
 }
 
 acquire_profile() {
-  local id="$1" session="$2" owner_pid="$3" container conflict other_id other_file other_container
+  local id="$1" session="$2" owner_pid="$3" container conflict context
+  local other_id other_file other_container
   valid_id "$id" || die "invalid local-model profile ID: $id"
   [[ "$session" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || die "invalid session name"
   [[ "$owner_pid" =~ ^[1-9][0-9]*$ ]] || die "invalid reservation PID"
@@ -523,6 +560,10 @@ acquire_profile() {
     podman stop --time 10 "$container" >/dev/null 2>&1 || true
     flock -u 9
     die "timed out waiting for local backend: $container"
+  fi
+  context="$(backend_context_value "$container" 2>/dev/null || true)"
+  if [ -n "$context" ]; then
+    printf 'Local context: %s tokens\n' "$context"
   fi
   flock -u 9
 }

@@ -164,8 +164,18 @@ by a JSON profile that follows `profile.schema.json`.
 - `id` matches filename, matches `[a-z0-9][a-z0-9-]{0,62}` pattern
 - `image` is pinned by SHA256 digest
 - `container`, `volume`, `secret` names match a safe pattern
+- `context` is exactly one validated policy:
+  - `fit`: target free MiB per GPU plus minimum useful tokens
+  - `fixed`: an explicit token count
 - `llama_args` is an array of strings — no newlines, no tabs
-- Reserved args (`--hf-repo`, `--host`, `--port`, `--api-key`, `--offline`, `--webui`, `--agent`) are rejected (the launcher owns these)
+- Reserved args (`--hf-repo`, `--host`, `--port`, `--api-key`, `--offline`,
+  `--webui`, `--agent`, and context/fit flags) are rejected (the launcher owns
+  these)
+
+The launcher compiles fit policy to `--fit on --fit-target <MiB> --fit-ctx
+<tokens>` without passing `--ctx-size`. llama.cpp begins at the model's native
+maximum and uses virtual allocations to reduce context only when necessary.
+Fixed policy compiles to `--fit off --ctx-size <tokens>`.
 
 **Container compatibility check** (`container_compatible`):
 - Validates an existing container against its profile using `podman inspect`
@@ -180,6 +190,7 @@ acquire(profile, session, pid)
     ├── Write reservation file
     ├── podman start (or reuse if already running)
     ├── Wait for /health (up to 900s)
+    ├── Read and print fitted per-slot context from /props
     └── Unlock
 
 release(profile, session)
