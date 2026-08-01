@@ -501,9 +501,10 @@ acquire_profile() {
   container="$(profile_field "$id" container)"
   podman container exists "$container" 2>/dev/null ||
     die "local model '$id' is not installed; run: just local-setup $id"
-  podman network exists "$NETWORK" 2>/dev/null &&
-    [ "$(podman network inspect -f '{{.Internal}}' "$NETWORK")" = "true" ] ||
+  if ! podman network exists "$NETWORK" 2>/dev/null ||
+     [ "$(podman network inspect -f '{{.Internal}}' "$NETWORK")" != "true" ]; then
     die "missing or non-internal local-model network: $NETWORK"
+  fi
   container_compatible "$id" ||
     die "local model '$id' has configuration drift; run: just local-setup $id"
 
@@ -518,7 +519,9 @@ acquire_profile() {
   fi
 
   while IFS=$'\t' read -r other_id other_file; do
-    [ -n "$other_id" ] && [ "$other_id" != "$id" ] || continue
+    if [ -z "$other_id" ] || [ "$other_id" = "$id" ]; then
+      continue
+    fi
     other_container="$(jq -r .container "$other_file")"
     if container_running "$other_container"; then
       echo "Stopping stale local backend: $other_container"
