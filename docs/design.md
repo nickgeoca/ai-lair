@@ -1,4 +1,4 @@
-# Hermes Sandbox — Design
+# AI Lair — Design
 
 ## What this is
 
@@ -65,7 +65,7 @@ profile into Podman runtime flags.
 │        │ clone (ro)     │ mount (ro)      │ mount (rw)  │
 │        ▼                ▼                 ▼             │
 │  ┌─────────────────────────────────────────────────┐    │
-│  │  Hermes Sandbox Container (rootless Podman)     │    │
+│  │  AI Lair: Hermes container (rootless Podman)    │    │
 │  │  uid=10000  no-new-privileges  pids-limit=2048 │    │
 │  │                                                 │    │
 │  │  /workspace/repo      (disposable clone, rw)    │    │
@@ -119,7 +119,7 @@ Disposable clone (repos/foo)
     │ Agent cannot see ~/projects or any other clone
     │
     ▼
-Human runs: just get-repo foo
+Human runs: lair get repo foo
     ├── Preflight: both checkouts clean? Primary on a branch?
     ├── Review: shows commits, changed files
     ├── Confirm: explicit "IMPORT" prompt

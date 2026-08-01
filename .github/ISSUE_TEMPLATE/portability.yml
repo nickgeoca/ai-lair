@@ -1,0 +1,26 @@
+name: Portability report
+description: Report results on a Linux distribution or supported host configuration.
+title: "portability: "
+labels: [portability]
+body:
+  - type: input
+    id: platform
+    attributes:
+      label: Distribution and version
+      placeholder: Fedora 43
+    validations:
+      required: true
+  - type: textarea
+    id: versions
+    attributes:
+      label: Relevant versions
+      description: Include kernel, Bash, Podman, pasta, jq, and NVIDIA/CDI details when applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: results
+    attributes:
+      label: Commands and results
+      description: Describe the public quickstart commands used and redact host-specific or sensitive output.
+    validations:
+      required: true

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read and validate declarative capability profiles for the Hermes sandbox.
+# Read and validate declarative capability profiles for AI Lair's Hermes adapter.
 # Profiles are data, not code. The launcher consumes them to generate Podman flags.
 set -euo pipefail
 

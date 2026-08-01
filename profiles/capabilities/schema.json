@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Hermes sandbox capability profile",
+  "title": "AI Lair Hermes capability profile",
   "description": "Declarative capability set for an AI agent session. The launcher validates the profile and translates it to Podman runtime flags. Profiles are data — auditable, diffable, shareable.",
   "type": "object",
   "additionalProperties": false,

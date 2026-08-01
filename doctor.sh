@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Read-only host preflight for the supported Hermes Sandbox path.
+# Read-only host preflight for the supported AI Lair path.
 set -u
 
 HERE="$(dirname "$(readlink -f "$0")")"
@@ -20,7 +20,7 @@ check_command() {
   fi
 }
 
-echo "Hermes Sandbox doctor"
+echo "AI Lair doctor"
 echo
 
 if [ "${BASH_VERSINFO[0]}" -ge 4 ]; then

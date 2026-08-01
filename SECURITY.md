@@ -2,7 +2,7 @@
 
 ## Project status
 
-Hermes Sandbox is experimental software. It is not a formally audited security
+AI Lair is experimental software. It is not a formally audited security
 boundary and does not claim production readiness. Security properties are
 limited to the behavior documented in `docs/design.md` and covered by the
 available tests.

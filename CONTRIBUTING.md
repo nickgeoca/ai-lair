@@ -1,6 +1,7 @@
 # Contributing
 
-Hermes Sandbox is an experimental, security-sensitive shell and Podman project.
+AI Lair is an experimental, security-sensitive shell and Podman project. Hermes
+Agent is the only supported harness in the current release.
 Bug reports, portability findings, documentation improvements, tests, and
 focused implementation changes are welcome.
 

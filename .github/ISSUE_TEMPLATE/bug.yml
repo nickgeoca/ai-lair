@@ -1,0 +1,37 @@
+name: Bug report
+description: Report reproducible incorrect behavior that is not security-sensitive.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not report vulnerabilities or include credentials, private data, or host secrets here. Use the private security-reporting link instead.
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Observed behavior
+      description: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide minimal steps using non-sensitive example data.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the AI Lair commit, Linux distribution, Bash, Podman, and pasta versions when relevant.
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness
+      options:
+        - Hermes Agent
+    validations:
+      required: true

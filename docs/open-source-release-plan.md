@@ -1,6 +1,6 @@
 # Open-source release plan
 
-This document is the working plan for publishing Hermes Sandbox as an
+This document is the working plan for publishing AI Lair as an
 experimental public project without making completion of every planned feature
 a prerequisite. It complements `TODO.md`, which remains the product roadmap.
 
@@ -33,29 +33,35 @@ description:
   tested. Defense-in-depth measures are not described as hard boundaries.
 - Support: best effort; issues and contributions are welcome.
 
-## Publication gates
+## Publication and release gates
 
-Do not attach a public remote or publish a release until every blocking item
+The source may be published as an explicitly experimental preview after the
+history, licensing, documentation, and project-hygiene checks are complete and
+any missing live verification is disclosed. Do not tag a versioned v0.5
+release or describe the runtime path as supported until every blocking item
 below is complete.
+
+The audit performed before the initial source preview is recorded in
+`docs/publication-audit.md`.
 
 ### 1. Repository and history safety audit
 
-- [ ] Confirm `git status --short` contains only intentional changes.
-- [ ] Review every tracked path with `git ls-files`.
-- [ ] Scan the complete Git history, all refs, and large objects for:
+- [x] Confirm `git status --short` contains only intentional changes.
+- [x] Review every tracked path with `git ls-files`.
+- [x] Scan the complete Git history, all refs, and large objects for:
   - API keys, tokens, passwords, and private endpoints;
   - `.env` contents and Podman secrets;
   - Hermes conversations, memories, logs, and pasted material;
   - private repository names, remotes, source code, and issue content;
   - personal filesystem paths, hostnames, usernames, email addresses, and IPs;
   - documents or datasets that cannot be redistributed.
-- [ ] Use a maintained secret scanner against the full history. Record the
+- [x] Use a maintained secret scanner against the full history. Record the
   scanner and version used in the release notes or audit log.
-- [ ] Manually inspect suspicious findings; do not rely only on automated
+- [x] Manually inspect suspicious findings; do not rely only on automated
   scanning.
-- [ ] Confirm the Git author name and email in every published commit are
+- [x] Confirm the Git author name and email in every published commit are
   intended to be public.
-- [ ] Confirm ignored runtime locations have never been tracked, especially
+- [x] Confirm ignored runtime locations have never been tracked, especially
   `data/`, `repos/`, `outbox/`, `local-models.local/`, model files, cache
   volumes, generated manifests, and backup configuration files.
 - [ ] If any credential ever entered history, rotate it first. Removing the
@@ -117,10 +123,10 @@ Do not paste raw secret-scanner findings into public issues or logs.
 
 - [x] Add a concise `CONTRIBUTING.md`.
 - [x] Add a security reporting policy appropriate for an experimental project.
-- [ ] Add issue templates for bugs, portability reports, and feature proposals.
-- [ ] Add a pull-request template with testing and security-impact fields.
-- [ ] Configure CI to run `just test`.
-- [ ] Review ShellCheck findings before making ShellCheck a required check.
+- [x] Add issue templates for bugs, portability reports, and feature proposals.
+- [x] Add a pull-request template with testing and security-impact fields.
+- [x] Configure CI to run `just test`.
+- [x] Review ShellCheck findings before making ShellCheck a required check.
 - [ ] Decide whether to enable GitHub Discussions.
 - [ ] Create labels: `good first issue`, `help wanted`, `security`,
   `portability`, `local-model`, `caching`, and `documentation`.
