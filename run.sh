@@ -29,7 +29,9 @@
 set -euo pipefail
 
 HERE="$(dirname "$(readlink -f "$0")")"
-IMAGE=hermes-agent:v2026.7.1
+# shellcheck source=images/hermes/metadata.conf
+source "$HERE/images/hermes/metadata.conf"
+IMAGE="$HERMES_AGENT_IMAGE"
 # Override only for parallel smoke tests; ordinary sessions retain the stable
 # name used by the justfile's exec-into-running-session helper.
 CONTAINER_NAME="${HERMES_CONTAINER_NAME:-hermes}"

@@ -4,10 +4,12 @@
 set -euo pipefail
 
 HERE="$(dirname "$(readlink -f "$0")")"
+# shellcheck source=images/hermes/metadata.conf
+source "$HERE/images/hermes/metadata.conf"
 NETWORK=hermes-analysis
 GATEWAY=hermes-llm-gateway
 GATEWAY_IMAGE='docker.io/library/nginx@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1'
-HERMES_IMAGE=hermes-agent:v2026.7.1
+HERMES_IMAGE="$HERMES_AGENT_IMAGE"
 ENV_FILE="$HERE/data/.env"
 TEMPLATE="$HERE/gateway/openrouter.conf.template"
 

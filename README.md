@@ -3,6 +3,43 @@
 Rootless Podman wrapper for running Hermes without exposing the host home
 directory, credentials, Podman socket, or unrelated project checkouts.
 
+This is an experimental Linux preview for technical users. The supported path
+requires Bash 4+, Git, `just`, `jq`, OpenSSL, rootless Podman, and `pasta`.
+Local-model and restricted-analysis GPU features additionally require NVIDIA
+CDI support.
+
+## Clean-clone quickstart
+
+Clone the repository, then build the exact Hermes Agent revision selected by
+the sandbox:
+
+```bash
+git clone <public-repository-url> hermes-sandbox
+cd hermes-sandbox
+just bootstrap
+just doctor
+```
+
+`bootstrap` creates the ignored runtime directories and builds
+`hermes-agent:v2026.7.1` from the full upstream commit recorded in
+`images/hermes/metadata.conf`. It applies the small tracked Podman compatibility
+patch before building. The upstream checkout is temporary and is removed when
+the build finishes. Use `just bootstrap --rebuild` to replace an existing
+image.
+
+Configure OpenRouter inside the persistent sandbox home, then launch the first
+session:
+
+```bash
+just setup
+just run
+```
+
+`just doctor` is read-only. It reports missing host commands, an unusable or
+non-rootless Podman service, a missing or mismatched Hermes image, and missing
+runtime directories. Image construction downloads upstream source, base
+images, operating-system packages, and application dependencies.
+
 Run commands from this directory:
 
 ```bash
@@ -161,12 +198,14 @@ slot reservations, and the separate upstream `src/` checkout are ignored.
 
 This repository is preparing for a v0.5 public preview. The sandbox policy,
 disposable-clone workflow, capability-profile validation, and non-integration
-tests are implemented. Image bootstrapping, clean-clone onboarding, CI, broader
-portability, and live Podman integration coverage remain on the
-[roadmap](TODO.md).
+tests are implemented. The source-pinned image/bootstrap path and clean-clone
+instructions are also implemented but still require verification on a clean
+supported host. CI, broader portability, and live Podman integration coverage
+remain on the [roadmap](TODO.md).
 
-The current implementation targets Linux, Bash, rootless Podman with `pasta`,
-Git, `just`, primary repositories beneath `~/projects`, and OpenRouter.
+The current implementation targets Linux, Bash 4+, rootless Podman with
+`pasta`, Git, `just`, `jq`, OpenSSL, primary repositories beneath `~/projects`,
+and OpenRouter.
 Restricted analysis mode and the bundled local-model profiles additionally
 assume NVIDIA CDI support.
 

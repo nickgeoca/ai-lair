@@ -6,6 +6,18 @@ set positional-arguments
 capability-profiles:
     ./profile-read.sh list
 
+# inspect host prerequisites and the pinned Hermes image without changing state
+doctor:
+    ./doctor.sh
+
+# build the source-pinned Hermes Agent image expected by the launchers
+image:
+    ./build-hermes-image.sh
+
+# create runtime directories and build the image; pass --rebuild to replace it
+bootstrap option="":
+    ./bootstrap.sh {{ quote(option) }}
+
 # claim the first available slot and start an interactive Hermes TUI
 run:
     ./slot-run.sh run
@@ -35,6 +47,7 @@ test:
     ./tests/run-safe-roots.sh
     ./tests/pdf-tools.sh
     ./tests/local-models.sh
+    ./tests/release-tools.sh
     ./local-models.sh validate
 
 # run with selected disposable repository clones and normal Internet access

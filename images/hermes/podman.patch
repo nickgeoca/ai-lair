@@ -1,0 +1,14 @@
+diff --git a/Dockerfile b/Dockerfile
+index 9217032..89f9c42 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -199,4 +199,8 @@ RUN cd web && npm run build && \
+ # node_modules + source (21s amd64 / 222s arm64 — #49113).  `a+rX,go-w`
+ # gives the non-root hermes user read + traverse but no write; root retains
+ # write so the build steps below don't need chmod u+w dances.
+-COPY --link --chmod=a+rX,go-w . .
++# NOTE (Podman compatibility): Buildah only accepts octal COPY --chmod modes.
++# Apply the symbolic mode with coreutils instead. This preserves the upstream
++# permissions at the cost of one additional filesystem walk during the build.
++COPY --link . .
++RUN chmod -R a+rX,go-w .

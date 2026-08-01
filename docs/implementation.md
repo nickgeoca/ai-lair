@@ -2,6 +2,14 @@
 
 ## File map
 
+- `build-hermes-image.sh` fetches one full upstream Hermes Agent commit, applies
+  `images/hermes/podman.patch`, and builds the local image used by every
+  launcher. `images/hermes/metadata.conf` is the shared source revision and
+  image-tag authority.
+- `bootstrap.sh` creates ignored runtime directories and builds the image when
+  absent. `doctor.sh` performs the corresponding read-only host and image
+  checks.
+
 ```
 sandbox/
 ├── README.md                      # User-facing: what, why, quickstart
@@ -10,6 +18,11 @@ sandbox/
 │   └── implementation.md          # This file
 │
 ├── justfile                       # Task runner (just run, just run-repo, just test, …)
+│
+├── bootstrap.sh                   # First-run directories + image preparation
+├── build-hermes-image.sh          # Pinned upstream image build
+├── doctor.sh                      # Read-only host and image preflight
+├── images/hermes/                 # Image metadata + Podman compatibility patch
 │
 ├── run.sh                         # ██████████████████████████████████████
 ├── slot-run.sh                    # ███  LAUNCHER (policy engine)    ███

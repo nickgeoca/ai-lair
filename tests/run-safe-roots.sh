@@ -8,8 +8,9 @@ trap 'rm -rf -- "$TMP"' EXIT
 mkdir -p "$TMP/bin" "$TMP/sandbox/data" "$TMP/sandbox/outbox" \
   "$TMP/sandbox/datasets" "$TMP/sandbox/profiles/capabilities" \
   "$TMP/sandbox/repos/example" "$TMP/sandbox/repos/second" \
-  "$TMP/sandbox/workspace"
+  "$TMP/sandbox/workspace" "$TMP/sandbox/images/hermes"
 cp "$HERE/run.sh" "$TMP/sandbox/run.sh"
+cp "$HERE/images/hermes/metadata.conf" "$TMP/sandbox/images/hermes/metadata.conf"
 cp "$HERE/profile-read.sh" "$TMP/sandbox/profile-read.sh"
 cp "$HERE/profiles/capabilities/"*.json "$TMP/sandbox/profiles/capabilities/"
 cp "$HERE/workspace/AGENTS.md" "$TMP/sandbox/workspace/AGENTS.md"

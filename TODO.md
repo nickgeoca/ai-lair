@@ -6,14 +6,14 @@ release engineering, portability, and end-to-end verification.
 
 ## v0.5 publication
 
-- Make the `hermes-agent:v2026.7.1` image reproducible from a clean clone.
-  Commit a build script and the Podman-compatible upstream Dockerfile patch,
-  pinned to an exact Hermes Agent release or commit. Alternatively, use a
-  published image pinned by digest.
-- Add a clean-clone quickstart covering prerequisites, image preparation,
-  OpenRouter setup, the first launch, and a smoke test.
-- Add a `just doctor` or `just bootstrap` command that checks required tools,
-  rootless Podman, `pasta`, the Hermes image, and required runtime directories.
+- Verify the source-pinned `hermes-agent:v2026.7.1` build from a genuinely
+  clean clone on the supported host. Record the build result and exact host
+  versions; decide whether binary-reproducible builds or a published image
+  pinned by digest are required after the preview.
+- Verify the documented clean-clone quickstart, OpenRouter setup, first launch,
+  and smoke test without relying on existing Podman or runtime state.
+- Expand `just doctor` diagnostics as clean-host testing reveals additional
+  implicit dependencies or unsupported configurations.
 - Add continuous integration that runs `just test`; add ShellCheck once its
   findings have been reviewed.
 - Run a final full-history secret and private-data scan immediately before

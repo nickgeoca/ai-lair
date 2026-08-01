@@ -10,6 +10,9 @@
 !/TODO.md
 !/justfile
 !/analysis.sh
+!/bootstrap.sh
+!/build-hermes-image.sh
+!/doctor.sh
 !/get-repo.sh
 !/local-models.sh
 !/run.sh
@@ -35,6 +38,14 @@
 /workspace/*
 !/workspace/AGENTS.md
 
+# Source-pinned image metadata and reviewed build patches.
+!/images/
+/images/*
+!/images/hermes/
+/images/hermes/*
+!/images/hermes/metadata.conf
+!/images/hermes/podman.patch
+
 # Declarative, non-executable local-model profiles are contribution-friendly:
 # adding a reviewed JSON profile does not require another .gitignore change.
 !/local-models/
@@ -50,6 +61,7 @@
 /docs/*
 !/docs/design.md
 !/docs/implementation.md
+!/docs/open-source-release-plan.md
 
 !/tests/
 /tests/*
@@ -59,3 +71,4 @@
 !/tests/pdf-tools.sh
 !/tests/run-capability-args.sh
 !/tests/run-safe-roots.sh
+!/tests/release-tools.sh
