@@ -214,6 +214,13 @@ or `/etc/nixos`. A Nix flake or NixOS module could later provide a convenient,
 optional way to install the prerequisites, but it should remain separate from
 the portable shell-and-Podman implementation.
 
+## Contributing and security
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md) for the
+project's checks and security-boundary expectations. Report vulnerabilities
+through the private process in [SECURITY.md](SECURITY.md), not through a public
+issue containing sensitive details.
+
 ## License
 
 Hermes sandbox is available under the [MIT License](LICENSE).

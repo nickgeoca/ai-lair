@@ -115,8 +115,8 @@ Do not paste raw secret-scanner findings into public issues or logs.
 
 ### 5. Project hygiene
 
-- [ ] Add a concise `CONTRIBUTING.md`.
-- [ ] Add a security reporting policy appropriate for an experimental project.
+- [x] Add a concise `CONTRIBUTING.md`.
+- [x] Add a security reporting policy appropriate for an experimental project.
 - [ ] Add issue templates for bugs, portability reports, and feature proposals.
 - [ ] Add a pull-request template with testing and security-impact fields.
 - [ ] Configure CI to run `just test`.

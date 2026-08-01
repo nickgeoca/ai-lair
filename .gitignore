@@ -5,7 +5,9 @@
 
 # Public top-level project files.
 !/.gitignore
+!/CONTRIBUTING.md
 !/README.md
+!/SECURITY.md
 !/LICENSE
 !/TODO.md
 !/justfile
