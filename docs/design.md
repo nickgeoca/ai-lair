@@ -170,3 +170,16 @@ possible without architectural changes.
 
 6. **The LLM is not the threat.** The inference backend runs read-only,
    offline, with no tools. The agent is the threat. Contain the agent.
+
+## Layer ownership
+
+AI Lair owns the boundary around a harness: selected mounts, network policy,
+compute access, persistent harness state, disposable repository clones, and
+reviewed retrieval. A harness adapter owns only the wiring needed to configure
+and launch that harness inside the boundary.
+
+Agent tools, prompts, document extraction, browser behavior, LSP integration,
+subagents, and other tool-surface features belong to the harness itself. AI
+Lair should test those features only when it makes an explicit compatibility
+promise, and then against the built adapter image rather than an ignored
+upstream source checkout.

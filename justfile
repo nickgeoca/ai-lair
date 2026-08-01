@@ -50,7 +50,6 @@ test:
     ./tests/capability-profiles.sh
     ./tests/run-capability-args.sh
     ./tests/run-safe-roots.sh
-    ./tests/pdf-tools.sh
     ./tests/local-models.sh
     ./tests/release-tools.sh
     ./local-models.sh validate

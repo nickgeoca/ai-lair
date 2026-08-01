@@ -87,6 +87,5 @@
 !/tests/lair.sh
 !/tests/run-safe-roots.sh
 !/tests/capability-profiles.sh
-!/tests/pdf-tools.sh
 !/tests/run-capability-args.sh
 !/tests/release-tools.sh
