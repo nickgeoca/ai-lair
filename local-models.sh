@@ -9,7 +9,6 @@ RUNTIME_DIR="${HERMES_LOCAL_RUNTIME_DIR:-${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/
 NETWORK="${HERMES_LOCAL_NETWORK:-hermes-llm}"
 LOCK_FILE="$RUNTIME_DIR/lifecycle.lock"
 RESERVATION_DIR="$RUNTIME_DIR/reservations"
-SESSION_LABEL="io.hermes.local-session"
 BACKEND_LABEL="io.hermes.local-backend"
 DOWNLOAD_CONTAINER=""
 

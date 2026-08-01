@@ -2,7 +2,7 @@
 set -euo pipefail
 
 HERE="$(dirname "$(readlink -f "$0")")/.."
-# shellcheck source=../images/hermes/metadata.conf
+# shellcheck source=images/hermes/metadata.conf
 source "$HERE/images/hermes/metadata.conf"
 
 [[ "$HERMES_AGENT_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || {
@@ -16,8 +16,11 @@ source "$HERE/images/hermes/metadata.conf"
 
 git apply --numstat "$HERE/images/hermes/podman.patch" >/dev/null
 
-grep -Fq 'source "$HERE/images/hermes/metadata.conf"' "$HERE/run.sh"
-grep -Fq 'source "$HERE/images/hermes/metadata.conf"' "$HERE/analysis.sh"
+# Match the literal source expression in the launchers; expansion is unwanted.
+# shellcheck disable=SC2016
+EXPECTED_SOURCE='source "$HERE/images/hermes/metadata.conf"'
+grep -Fq "$EXPECTED_SOURCE" "$HERE/run.sh"
+grep -Fq "$EXPECTED_SOURCE" "$HERE/analysis.sh"
 grep -Fq 'HERMES_AGENT_SOURCE_COMMIT' "$HERE/build-hermes-image.sh"
 
 TMP="$(mktemp -d)"

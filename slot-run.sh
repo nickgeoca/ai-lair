@@ -174,10 +174,10 @@ elif [ "$MODE" = "data" ]; then
   declare -A SEEN_DATA_NAMES=()
   for input in "$@"; do
     path="$(realpath -e -- "$input" 2>/dev/null || true)"
-    [ -n "$path" ] && { [ -f "$path" ] || [ -d "$path" ]; } || {
+    if [ -z "$path" ] || ! { [ -f "$path" ] || [ -d "$path" ]; }; then
       echo "missing file or directory: $input" >&2
       exit 2
-    }
+    fi
     if [[ "$path" == *$'\n'* || "$path" == *:* ]]; then
       echo "unsupported ':' or newline in data path: $input" >&2
       exit 2
@@ -222,7 +222,7 @@ LOCAL_IDS=()
 LOCAL_LABELS=()
 LOCAL_STATES=()
 if command -v jq >/dev/null 2>&1; then
-  while IFS=$'\t' read -r id label state origin; do
+  while IFS=$'\t' read -r id label state _origin; do
     [ -n "$id" ] || continue
     LOCAL_IDS+=("$id")
     LOCAL_LABELS+=("$label")

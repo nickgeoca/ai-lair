@@ -14,16 +14,7 @@ release engineering, portability, and end-to-end verification.
   and smoke test without relying on existing Podman or runtime state.
 - Expand `just doctor` diagnostics as clean-host testing reveals additional
   implicit dependencies or unsupported configurations.
-- Add continuous integration that runs `just test`; add ShellCheck once its
-  findings have been reviewed.
-- Run a final full-history secret and private-data scan immediately before
-  attaching the public remote. Confirm that the author identity and email in
-  existing commits are intended to be public.
-- Decide how local-model launches fit the capability-policy model. They
-  currently bypass capability profiles for compatibility. Either add a
-  `local-dual` profile selected by `slot-run.sh`, or document the narrower
-  policy guarantee prominently.
-
+- Add continuous integration that runs `just test` and ShellCheck.
 ## Portability and hardening
 
 - Make the primary checkout root configurable instead of assuming

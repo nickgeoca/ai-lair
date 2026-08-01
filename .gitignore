@@ -5,6 +5,7 @@
 
 # Public top-level project files.
 !/.gitignore
+!/.gitleaks.toml
 !/CONTRIBUTING.md
 !/README.md
 !/SECURITY.md
@@ -63,6 +64,7 @@
 /docs/*
 !/docs/design.md
 !/docs/implementation.md
+!/docs/code-review-capability-profiles.md
 !/docs/open-source-release-plan.md
 
 !/tests/
@@ -72,5 +74,4 @@
 !/tests/capability-profiles.sh
 !/tests/pdf-tools.sh
 !/tests/run-capability-args.sh
-!/tests/run-safe-roots.sh
 !/tests/release-tools.sh

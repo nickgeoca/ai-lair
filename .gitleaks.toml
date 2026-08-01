@@ -1,0 +1,12 @@
+title = "Hermes Sandbox Gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local-model profiles name Podman secret objects; they do not contain secret values"
+condition = "AND"
+targetRules = ["generic-api-key"]
+regexTarget = "line"
+paths = ['''(^|/)local-models/profiles/[^/]+\.json$''']
+regexes = ['''^\s*"secret"\s*:\s*"llama-[a-z0-9-]+-api-key"\s*,?\s*$''']

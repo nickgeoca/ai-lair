@@ -202,9 +202,10 @@ echo
 echo "=== Mount enforcement ==="
 
 test_mount_rejection() {
-  local name="$1" profile="$2" env_vars="$3"
+  local name="$1" profile="$2"
   local output
-  output="$(env -i PATH="$PATH" HOME="$HOME" $env_vars bash "$HERE/run.sh" --capability-profile "$profile" true 2>&1 || true)"
+  output="$(env -i PATH="$PATH" HOME="$HOME" HERMES_REPOS= \
+    bash "$HERE/run.sh" --capability-profile "$profile" true 2>&1 || true)"
   if echo "$output" | grep -qi "jq is required"; then
     echo "  SKIP $name (jq not installed)"
     return
@@ -222,7 +223,7 @@ test_mount_rejection() {
 }
 
 # dev profile (requires repos) called without repos — should reject
-test_mount_rejection "dev without repos" dev "HERMES_REPOS="
+test_mount_rejection "dev without repos" dev
 
 # data-science repos rejection is tested with fake podman in run-capability-args.sh
 echo "  SKIP data-science repos rejection (tested in run-capability-args.sh)"
