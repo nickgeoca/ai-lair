@@ -35,11 +35,11 @@ just bootstrap
 ```
 
 `bootstrap` creates the ignored runtime directories and builds
-`hermes-agent:v2026.7.1` from the full upstream commit recorded in
-`images/hermes/metadata.conf`. It applies the small tracked Podman compatibility
-patch before building. The upstream checkout is temporary and is removed when
-the build finishes. Use `just bootstrap --rebuild` to replace an existing
-image.
+`hermes-agent:v2026.7.1-lair.1` from the full upstream commit recorded in
+`images/hermes/metadata.conf`. It applies tracked local-runtime and Podman
+compatibility patches before building. The upstream checkout is temporary and
+is removed when the build finishes. Use `just bootstrap --rebuild` to replace
+an existing image.
 
 Configure OpenRouter inside the persistent lair home, then launch the first
 session with no project or data access:

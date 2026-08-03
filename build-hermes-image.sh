@@ -5,14 +5,18 @@ set -euo pipefail
 HERE="$(dirname "$(readlink -f "$0")")"
 # shellcheck source=images/hermes/metadata.conf
 source "$HERE/images/hermes/metadata.conf"
-PATCH="$HERE/images/hermes/podman.patch"
+PATCHES=(
+  "$HERE/images/hermes/0001-fix-honor-explicit-local-model-runtime.patch"
+  "$HERE/images/hermes/podman.patch"
+)
 
 usage() {
   cat <<'EOF'
 usage: ./build-hermes-image.sh
 
-Fetch the pinned Hermes Agent source revision, apply the tracked Podman
-compatibility patch, and build the image expected by the sandbox launchers.
+Fetch the pinned Hermes Agent source revision, apply the tracked AI Lair
+runtime and Podman compatibility patches, and build the image expected by the
+sandbox launchers.
 The temporary source checkout is removed after the build.
 EOF
 }
@@ -30,7 +34,9 @@ for command_name in git podman; do
     exit 1
   }
 done
-[ -f "$PATCH" ] || { echo "missing Podman patch: $PATCH" >&2; exit 1; }
+for patch_path in "${PATCHES[@]}"; do
+  [ -f "$patch_path" ] || { echo "missing Hermes patch: $patch_path" >&2; exit 1; }
+done
 
 BUILD_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/hermes-agent-build.XXXXXX")"
 SOURCE_DIR="$BUILD_ROOT/source"
@@ -45,8 +51,10 @@ git -C "$SOURCE_DIR" remote add origin "$HERMES_AGENT_SOURCE_URL"
 git -C "$SOURCE_DIR" fetch --quiet --depth=1 origin "$HERMES_AGENT_SOURCE_COMMIT"
 git -C "$SOURCE_DIR" checkout --quiet --detach FETCH_HEAD
 
-git -C "$SOURCE_DIR" apply --check "$PATCH"
-git -C "$SOURCE_DIR" apply "$PATCH"
+for patch_path in "${PATCHES[@]}"; do
+  git -C "$SOURCE_DIR" apply --check "$patch_path"
+  git -C "$SOURCE_DIR" apply "$patch_path"
+done
 
 echo "Building $HERMES_AGENT_IMAGE"
 podman build \
@@ -55,5 +63,15 @@ podman build \
   --label "org.opencontainers.image.source=$HERMES_AGENT_SOURCE_URL" \
   --tag "$HERMES_AGENT_IMAGE" \
   "$SOURCE_DIR"
+
+PARSER_HELP="$(podman run --rm \
+  --entrypoint /opt/hermes/.venv/bin/hermes \
+  "$HERMES_AGENT_IMAGE" \
+  --tui --model local-smoke-test --provider custom \
+  --base-url http://local-smoke-test:8080/v1 --help)"
+if ! grep -Fq -- '--base-url BASE_URL' <<<"$PARSER_HELP"; then
+  echo "built Hermes image does not support the launcher's --base-url override" >&2
+  exit 1
+fi
 
 echo "Built $HERMES_AGENT_IMAGE from $HERMES_AGENT_SOURCE_COMMIT"

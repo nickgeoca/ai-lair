@@ -1,0 +1,448 @@
+From 8b2122bef145829db9e0c7650c68293f71bc50ec Mon Sep 17 00:00:00 2001
+From: Nick Geoca <nickgeoca@gmail.com>
+Date: Wed, 29 Jul 2026 22:02:35 -0700
+Subject: [PATCH] fix: honor explicit local model runtime
+
+---
+ hermes_cli/_parser.py                         | 24 +++++++--
+ hermes_cli/main.py                            | 10 ++++
+ hermes_cli/oneshot.py                         |  8 ++-
+ .../test_argparse_flag_propagation.py         | 22 ++++++++
+ tests/hermes_cli/test_tui_resume_flow.py      | 28 +++++++---
+ tests/tools/test_local_env_blocklist.py       |  1 +
+ tests/tui_gateway/test_make_agent_provider.py | 53 +++++++++++++++++++
+ tools/environments/local.py                   |  1 +
+ tui_gateway/server.py                         | 24 ++++++++-
+ 9 files changed, 156 insertions(+), 15 deletions(-)
+
+diff --git a/hermes_cli/_parser.py b/hermes_cli/_parser.py
+index 521c5fc..9106b53 100644
+--- a/hermes_cli/_parser.py
++++ b/hermes_cli/_parser.py
+@@ -111,10 +111,10 @@ def build_top_level_parser():
+             "auto-bypassed. Intended for scripts / pipes."
+         ),
+     )
+-    # --model / --provider are accepted at the top level so they can pair
+-    # with -z without needing the `chat` subcommand.  If neither -z nor a
+-    # subcommand consumes them, they fall through harmlessly as None.
+-    # Mirrors `hermes chat --model ... --provider ...` semantics.
++    # --model / --provider / --base-url are accepted at the top level so they
++    # can pair with -z without needing the `chat` subcommand.  If neither -z
++    # nor a subcommand consumes them, they fall through harmlessly as None.
++    # Mirrors `hermes chat --model ... --provider ... --base-url ...` semantics.
+     _inherited_flag(
+         parser,
+         "-m",
+@@ -135,6 +135,16 @@ def build_top_level_parser():
+             "under model.provider — use `hermes setup` or edit the file to change it."
+         ),
+     )
++    _inherited_flag(
++        parser,
++        "--base-url",
++        default=None,
++        help=(
++            "API base URL override for this invocation. Applies to "
++            "-z/--oneshot, --tui, and classic chat without changing "
++            "config.yaml."
++        ),
++    )
+     parser.add_argument(
+         "-t",
+         "--toolsets",
+@@ -284,6 +294,12 @@ def build_top_level_parser():
+         default=None,
+         help="Inference provider (default: auto). Built-in or a user-defined name from `providers:` in config.yaml.",
+     )
++    _inherited_flag(
++        chat_parser,
++        "--base-url",
++        default=argparse.SUPPRESS,
++        help="API base URL override for this chat without changing config.yaml.",
++    )
+     chat_parser.add_argument(
+         "-v",
+         "--verbose",
+diff --git a/hermes_cli/main.py b/hermes_cli/main.py
+index aedcb60..374a63c 100644
+--- a/hermes_cli/main.py
++++ b/hermes_cli/main.py
+@@ -395,6 +395,7 @@ def _apply_profile_override() -> None:
+         "-z", "--oneshot",
+         "-m", "--model",
+         "--provider",
++        "--base-url",
+         "-t", "--toolsets",
+         "-r", "--resume",
+         "-s", "--skills",
+@@ -1985,6 +1986,7 @@ def _launch_tui(
+     tui_dev: bool = False,
+     model: Optional[str] = None,
+     provider: Optional[str] = None,
++    base_url: Optional[str] = None,
+     toolsets: object = None,
+     skills: object = None,
+     verbose: Optional[bool] = None,
+@@ -2048,6 +2050,8 @@ def _launch_tui(
+     if provider:
+         env["HERMES_TUI_PROVIDER"] = provider
+         env["HERMES_INFERENCE_PROVIDER"] = provider
++    if base_url:
++        env["HERMES_TUI_BASE_URL"] = base_url
+     tui_toolsets = _normalize_tui_toolsets(toolsets)
+     if tui_toolsets:
+         env["HERMES_TUI_TOOLSETS"] = ",".join(tui_toolsets)
+@@ -2363,6 +2367,7 @@ def cmd_chat(args):
+             tui_dev=getattr(args, "tui_dev", False),
+             model=getattr(args, "model", None),
+             provider=getattr(args, "provider", None),
++            base_url=getattr(args, "base_url", None),
+             toolsets=getattr(args, "toolsets", None),
+             skills=getattr(args, "skills", None),
+             verbose=getattr(args, "verbose", None),
+@@ -2383,6 +2388,8 @@ def cmd_chat(args):
+     kwargs = {
+         "model": args.model,
+         "provider": getattr(args, "provider", None),
++        "api_key": os.environ.get("HERMES_EXPLICIT_API_KEY") or None,
++        "base_url": getattr(args, "base_url", None),
+         "toolsets": args.toolsets,
+         "skills": getattr(args, "skills", None),
+         "verbose": getattr(args, "verbose", None),
+@@ -11956,6 +11963,7 @@ _TOP_LEVEL_VALUE_FLAGS = frozenset(
+         "-z", "--oneshot",
+         "-m", "--model",
+         "--provider",
++        "--base-url",
+         "-t", "--toolsets",
+         "-r", "--resume",
+         "-s", "--skills",
+@@ -12181,6 +12189,7 @@ def _try_termux_fast_cli_launch() -> bool:
+                 args.oneshot,
+                 model=getattr(args, "model", None),
+                 provider=getattr(args, "provider", None),
++                base_url=getattr(args, "base_url", None),
+                 toolsets=getattr(args, "toolsets", None),
+             )
+         )
+@@ -13609,6 +13618,7 @@ def main():
+                 args.oneshot,
+                 model=getattr(args, "model", None),
+                 provider=getattr(args, "provider", None),
++                base_url=getattr(args, "base_url", None),
+                 toolsets=getattr(args, "toolsets", None),
+             )
+         )
+diff --git a/hermes_cli/oneshot.py b/hermes_cli/oneshot.py
+index 38d8e5e..68fda3c 100644
+--- a/hermes_cli/oneshot.py
++++ b/hermes_cli/oneshot.py
+@@ -126,6 +126,7 @@ def run_oneshot(
+     prompt: str,
+     model: Optional[str] = None,
+     provider: Optional[str] = None,
++    base_url: Optional[str] = None,
+     toolsets: object = None,
+ ) -> int:
+     """Execute a single prompt and print only the final content block.
+@@ -136,6 +137,7 @@ def run_oneshot(
+             env var, then config.yaml's model.default / model.model.
+         provider: Optional provider override. Falls back to config.yaml's
+             model.provider, then "auto".
++        base_url: Optional API base URL override for this invocation.
+         toolsets: Optional comma-separated string or iterable of toolsets.
+ 
+     Returns the exit code.  Caller should sys.exit() with the return.
+@@ -187,6 +189,7 @@ def run_oneshot(
+                     prompt,
+                     model=model,
+                     provider=provider,
++                    base_url=base_url,
+                     toolsets=explicit_toolsets,
+                     use_config_toolsets=use_config_toolsets,
+                 )
+@@ -251,6 +254,7 @@ def _run_agent(
+     prompt: str,
+     model: Optional[str] = None,
+     provider: Optional[str] = None,
++    base_url: Optional[str] = None,
+     toolsets: object = None,
+     use_config_toolsets: bool = True,
+ ) -> tuple[str, dict]:
+@@ -319,10 +323,12 @@ def _run_agent(
+                 if detected:
+                     effective_provider, effective_model = detected
+ 
++    explicit_base_url = (base_url or "").strip() or explicit_base_url_from_alias
+     runtime = resolve_runtime_provider(
+         requested=effective_provider,
+         target_model=effective_model or None,
+-        explicit_base_url=explicit_base_url_from_alias,
++        explicit_api_key=os.environ.get("HERMES_EXPLICIT_API_KEY", "").strip() or None,
++        explicit_base_url=explicit_base_url,
+     )
+ 
+     # Pull in explicit toolsets when provided; otherwise use whatever the user
+diff --git a/tests/hermes_cli/test_argparse_flag_propagation.py b/tests/hermes_cli/test_argparse_flag_propagation.py
+index 87db493..c8f3796 100644
+--- a/tests/hermes_cli/test_argparse_flag_propagation.py
++++ b/tests/hermes_cli/test_argparse_flag_propagation.py
+@@ -56,6 +56,28 @@ def _build_parser():
+     return parser
+ 
+ 
++class TestBaseUrlArg:
++    def test_top_level_base_url_is_parsed(self):
++        from hermes_cli._parser import build_top_level_parser
++
++        parser, _subparsers, _chat_parser = build_top_level_parser()
++        args = parser.parse_args(
++            ["--base-url", "http://llama-qwen36:8080/v1", "--tui"]
++        )
++
++        assert args.base_url == "http://llama-qwen36:8080/v1"
++
++    def test_chat_base_url_is_parsed(self):
++        from hermes_cli._parser import build_top_level_parser
++
++        parser, _subparsers, _chat_parser = build_top_level_parser()
++        args = parser.parse_args(
++            ["chat", "--base-url", "http://llama-gemma4:8080/v1"]
++        )
++
++        assert args.base_url == "http://llama-gemma4:8080/v1"
++
++
+ class TestChatVerboseArg:
+     """Verify chat --verbose preserves config fallback when absent."""
+ 
+diff --git a/tests/hermes_cli/test_tui_resume_flow.py b/tests/hermes_cli/test_tui_resume_flow.py
+index 2b6305a..72d5cec 100644
+--- a/tests/hermes_cli/test_tui_resume_flow.py
++++ b/tests/hermes_cli/test_tui_resume_flow.py
+@@ -378,6 +378,7 @@ def test_termux_fast_cli_launch_oneshot_uses_light_parser(monkeypatch, main_mod)
+         "prompt": "hello",
+         "model": "gpt-test",
+         "provider": "openai",
++        "base_url": None,
+         "toolsets": None,
+     }
+ 
+@@ -821,6 +822,7 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
+     from hermes_cli.oneshot import _run_agent
+ 
+     captured = {}
++    resolver_kwargs = {}
+     sentinel_db = object()
+ 
+     class FakeAgent:
+@@ -856,18 +858,23 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
+         "hermes_cli.models",
+         mod("hermes_cli.models", detect_provider_for_model=lambda *_args, **_kwargs: None),
+     )
++    def fake_resolve_runtime_provider(**kwargs):
++        resolver_kwargs.update(kwargs)
++        return {
++            "api_key": "k",
++            "base_url": "u",
++            "provider": "p",
++            "api_mode": "chat_completions",
++            "credential_pool": None,
++        }
++
++    monkeypatch.setenv("HERMES_EXPLICIT_API_KEY", "local-secret")
+     monkeypatch.setitem(
+         sys.modules,
+         "hermes_cli.runtime_provider",
+         mod(
+             "hermes_cli.runtime_provider",
+-            resolve_runtime_provider=lambda **_kwargs: {
+-                "api_key": "k",
+-                "base_url": "u",
+-                "provider": "p",
+-                "api_mode": "chat_completions",
+-                "credential_pool": None,
+-            },
++            resolve_runtime_provider=fake_resolve_runtime_provider,
+         ),
+     )
+     monkeypatch.setitem(
+@@ -882,6 +889,7 @@ def test_oneshot_wires_session_db_for_recall(monkeypatch):
+     assert captured["session_db"] is sentinel_db
+     assert captured["enabled_toolsets"] == ["session_search"]
+     assert captured["prompt"] == "recall this"
++    assert resolver_kwargs["explicit_api_key"] == "local-secret"
+ 
+ 
+ def test_launch_tui_exports_model_provider_and_toolsets(monkeypatch, main_mod):
+@@ -905,7 +913,10 @@ def test_launch_tui_exports_model_provider_and_toolsets(monkeypatch, main_mod):
+ 
+     with pytest.raises(SystemExit):
+         main_mod._launch_tui(
+-            model="nous/hermes-test", provider="nous", toolsets="web, terminal"
++            model="nous/hermes-test",
++            provider="nous",
++            base_url="http://llama-qwen36:8080/v1",
++            toolsets="web, terminal",
+         )
+ 
+     env = captured["env"]
+@@ -913,6 +924,7 @@ def test_launch_tui_exports_model_provider_and_toolsets(monkeypatch, main_mod):
+     assert env["HERMES_INFERENCE_MODEL"] == "nous/hermes-test"
+     assert env["HERMES_TUI_PROVIDER"] == "nous"
+     assert env["HERMES_INFERENCE_PROVIDER"] == "nous"
++    assert env["HERMES_TUI_BASE_URL"] == "http://llama-qwen36:8080/v1"
+     assert env["HERMES_TUI_TOOLSETS"] == "web,terminal"
+     active_path = Path(env["HERMES_TUI_ACTIVE_SESSION_FILE"])
+     assert active_path.name.startswith("hermes-tui-active-session-")
+diff --git a/tests/tools/test_local_env_blocklist.py b/tests/tools/test_local_env_blocklist.py
+index 914fdfa..f89cf1f 100644
+--- a/tests/tools/test_local_env_blocklist.py
++++ b/tests/tools/test_local_env_blocklist.py
+@@ -66,6 +66,7 @@ class TestProviderEnvBlocklist:
+         leaked_vars = {
+             "OPENAI_BASE_URL": "http://localhost:8000/v1",
+             "OPENAI_API_KEY": "sk-fake-key",
++            "HERMES_EXPLICIT_API_KEY": "local-fake-key",
+             "OPENROUTER_API_KEY": "or-fake-key",
+             "ANTHROPIC_API_KEY": "ant-fake-key",
+             "LLM_MODEL": "anthropic/claude-opus-4-6",
+diff --git a/tests/tui_gateway/test_make_agent_provider.py b/tests/tui_gateway/test_make_agent_provider.py
+index 94b606d..37f9e3e 100644
+--- a/tests/tui_gateway/test_make_agent_provider.py
++++ b/tests/tui_gateway/test_make_agent_provider.py
+@@ -60,6 +60,59 @@ def test_make_agent_passes_resolved_provider():
+         assert call_kwargs.kwargs["api_mode"] == "anthropic_messages"
+ 
+ 
++def test_make_agent_honors_tui_base_url_override():
++    """A launcher-selected endpoint must outrank a stale config base URL."""
++
++    selected_url = "http://llama-qwen36:8080/v1"
++    fake_runtime = {
++        "provider": "custom",
++        "base_url": "http://llama-gemma4:8080/v1",
++        "api_key": "sk-test-key",
++        "api_mode": "chat_completions",
++        "command": None,
++        "args": None,
++        "credential_pool": None,
++    }
++    fake_cfg = {
++        "model": {
++            "default": "ggml-org/Qwen3.6-35B-A3B-GGUF:Q4_K_M",
++            "provider": "custom",
++            "base_url": "http://llama-gemma4:8080/v1",
++        },
++        "agent": {"system_prompt": ""},
++    }
++
++    with (
++        patch.dict(
++            os.environ,
++            {
++                "HERMES_MODEL": "ggml-org/Qwen3.6-35B-A3B-GGUF:Q4_K_M",
++                "HERMES_TUI_PROVIDER": "custom",
++                "HERMES_TUI_BASE_URL": selected_url,
++                "HERMES_EXPLICIT_API_KEY": "local-secret",
++            },
++        ),
++        patch("tui_gateway.server._load_cfg", return_value=fake_cfg),
++        patch("tui_gateway.server._get_db", return_value=MagicMock()),
++        patch("tui_gateway.server._load_reasoning_config", return_value=None),
++        patch("tui_gateway.server._load_service_tier", return_value=None),
++        patch("tui_gateway.server._load_enabled_toolsets", return_value=None),
++        patch(
++            "hermes_cli.runtime_provider.resolve_runtime_provider",
++            return_value=fake_runtime,
++        ) as mock_resolve,
++        patch("run_agent.AIAgent") as mock_agent,
++    ):
++        from tui_gateway.server import _make_agent
++
++        _make_agent("sid-local", "key-local")
++
++        assert mock_resolve.call_args.kwargs["explicit_base_url"] == selected_url
++        assert mock_resolve.call_args.kwargs["explicit_api_key"] == "local-secret"
++        assert mock_agent.call_args.kwargs["base_url"] == selected_url
++        assert mock_agent.call_args.kwargs["api_key"] == "local-secret"
++
++
+ def test_make_agent_forwards_provider_routing():
+     """Parity with the messaging gateway + CLI: ``provider_routing`` in
+     config.yaml must reach AIAgent so OpenRouter honors the user's sort /
+diff --git a/tools/environments/local.py b/tools/environments/local.py
+index bccba38..53af9a4 100644
+--- a/tools/environments/local.py
++++ b/tools/environments/local.py
+@@ -145,6 +145,7 @@ def _build_provider_env_blocklist() -> frozenset:
+     blocked.update({
+         "OPENAI_BASE_URL",
+         "OPENAI_API_KEY",
++        "HERMES_EXPLICIT_API_KEY",
+         "OPENAI_API_BASE",
+         "OPENAI_ORG_ID",
+         "OPENAI_ORGANIZATION",
+diff --git a/tui_gateway/server.py b/tui_gateway/server.py
+index 6bd1ed1..e8d0151 100644
+--- a/tui_gateway/server.py
++++ b/tui_gateway/server.py
+@@ -4264,6 +4264,12 @@ def _make_agent(
+             system_prompt = "\n\n".join(
+                 part for part in (system_prompt, skills_prompt) if part
+             ).strip()
++    # Set only by a trusted launcher that selected both the endpoint and its
++    # Podman secret.  Keeping this separate from OPENAI_API_KEY preserves the
++    # resolver's protection against forwarding a general OpenAI credential to
++    # an arbitrary custom hostname.
++    launcher_api_key = os.environ.get("HERMES_EXPLICIT_API_KEY", "").strip()
++
+     # Prefer a per-session model override (set by a prior in-session /model
+     # switch) over global config/env resolution. Resume-time stored sessions may
+     # also pass scalar model/provider/runtime knobs from the persisted DB row.
+@@ -4297,6 +4303,8 @@ def _make_agent(
+                 resolve_kwargs["explicit_base_url"] = override_base_url
+         resolve_kwargs["requested"] = requested_provider
+         resolve_kwargs["target_model"] = model or None
++        if launcher_api_key:
++            resolve_kwargs["explicit_api_key"] = launcher_api_key
+         runtime = _resolve_runtime_with_fallback(resolve_kwargs)
+         # The switch already resolved concrete credentials/endpoint; honor them
+         # so a custom/named endpoint survives the rebuild even if global
+@@ -4305,18 +4313,30 @@ def _make_agent(
+             runtime["base_url"] = override_base_url
+         if override_api_key:
+             runtime["api_key"] = override_api_key
++        elif launcher_api_key:
++            runtime["api_key"] = launcher_api_key
+         if override_api_mode:
+             runtime["api_mode"] = override_api_mode
+     else:
+         model, requested_provider = _resolve_startup_runtime()
++        startup_base_url = os.environ.get("HERMES_TUI_BASE_URL", "").strip()
+         if isinstance(model_override, str) and model_override:
+             model = model_override
+         if provider_override:
+             requested_provider = provider_override
+-        runtime = _resolve_runtime_with_fallback({
++        resolve_kwargs = {
+             "requested": requested_provider,
+             "target_model": model or None,
+-        })
++        }
++        if startup_base_url:
++            resolve_kwargs["explicit_base_url"] = startup_base_url
++        if launcher_api_key:
++            resolve_kwargs["explicit_api_key"] = launcher_api_key
++        runtime = _resolve_runtime_with_fallback(resolve_kwargs)
++        if startup_base_url:
++            runtime["base_url"] = startup_base_url
++        if launcher_api_key:
++            runtime["api_key"] = launcher_api_key
+     _pr = _load_provider_routing()
+     return AIAgent(
+         model=model,
+-- 
+2.55.0
+

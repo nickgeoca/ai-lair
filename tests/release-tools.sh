@@ -9,12 +9,17 @@ source "$HERE/images/hermes/metadata.conf"
   echo "Hermes source revision is not a full commit ID" >&2
   exit 1
 }
-[ "$HERMES_AGENT_IMAGE" = 'hermes-agent:v2026.7.1' ] || {
+[ "$HERMES_AGENT_IMAGE" = 'hermes-agent:v2026.7.1-lair.1' ] || {
   echo "unexpected Hermes image tag: $HERMES_AGENT_IMAGE" >&2
   exit 1
 }
 
 git apply --numstat "$HERE/images/hermes/podman.patch" >/dev/null
+RUNTIME_PATCH="$HERE/images/hermes/0001-fix-honor-explicit-local-model-runtime.patch"
+git apply --numstat "$RUNTIME_PATCH" >/dev/null
+grep -Fq -- '"--base-url"' "$RUNTIME_PATCH"
+grep -Fq 'HERMES_TUI_BASE_URL' "$RUNTIME_PATCH"
+grep -Fq 'HERMES_EXPLICIT_API_KEY' "$RUNTIME_PATCH"
 
 # Match the literal source expression in the launchers; expansion is unwanted.
 # shellcheck disable=SC2016
@@ -22,6 +27,7 @@ EXPECTED_SOURCE='source "$HERE/images/hermes/metadata.conf"'
 grep -Fq "$EXPECTED_SOURCE" "$HERE/run.sh"
 grep -Fq "$EXPECTED_SOURCE" "$HERE/analysis.sh"
 grep -Fq 'HERMES_AGENT_SOURCE_COMMIT' "$HERE/build-hermes-image.sh"
+grep -Fq '0001-fix-honor-explicit-local-model-runtime.patch' "$HERE/build-hermes-image.sh"
 
 TMP="$(mktemp -d)"
 cleanup() { rm -rf -- "$TMP"; }
@@ -42,6 +48,9 @@ cat > "$TMP/bin/podman" <<'EOF'
 printf 'podman' >> "$RELEASE_TOOL_LOG"
 printf ' <%s>' "$@" >> "$RELEASE_TOOL_LOG"
 printf '\n' >> "$RELEASE_TOOL_LOG"
+if [ "${1:-}" = run ]; then
+  echo 'usage: hermes [--base-url BASE_URL]'
+fi
 EOF
 chmod +x "$TMP/bin/git" "$TMP/bin/podman"
 
@@ -52,5 +61,7 @@ grep -Fq "fetch> <--quiet> <--depth=1> <origin> <$HERMES_AGENT_SOURCE_COMMIT>" "
 grep -Fq "HERMES_GIT_SHA=$HERMES_AGENT_SOURCE_COMMIT" "$TMP/log"
 grep -Fq "org.opencontainers.image.revision=$HERMES_AGENT_SOURCE_COMMIT" "$TMP/log"
 grep -Fq -- "--tag> <$HERMES_AGENT_IMAGE>" "$TMP/log"
+grep -Fq -- "run> <--rm> <--entrypoint> </opt/hermes/.venv/bin/hermes> <$HERMES_AGENT_IMAGE>" "$TMP/log"
+grep -Fq -- "--base-url> <http://local-smoke-test:8080/v1> <--help>" "$TMP/log"
 
 echo "release tool tests passed"

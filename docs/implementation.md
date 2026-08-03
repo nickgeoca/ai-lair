@@ -3,9 +3,10 @@
 ## File map
 
 - `build-hermes-image.sh` fetches one full upstream Hermes Agent commit, applies
-  `images/hermes/podman.patch`, and builds the local image used by every
-  launcher. `images/hermes/metadata.conf` is the shared source revision and
-  image-tag authority.
+  the tracked local-runtime and Podman compatibility patches in
+  `images/hermes/`, and builds the local image used by every launcher.
+  `images/hermes/metadata.conf` is the shared source revision and image-tag
+  authority.
 - `bootstrap.sh` creates ignored runtime directories and builds the image when
   absent. `doctor.sh` performs the corresponding read-only host and image
   checks.

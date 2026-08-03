@@ -1,0 +1,3 @@
+# Unified patch context and email signatures intentionally contain trailing
+# spaces as part of the patch format.
+images/hermes/*.patch -whitespace

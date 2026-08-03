@@ -5,6 +5,7 @@
 
 # Public top-level project files.
 !/.gitignore
+!/.gitattributes
 !/.gitleaks.toml
 !/.github/
 /.github/*
@@ -60,6 +61,7 @@
 !/images/hermes/
 /images/hermes/*
 !/images/hermes/metadata.conf
+!/images/hermes/0001-fix-honor-explicit-local-model-runtime.patch
 !/images/hermes/podman.patch
 
 # Declarative, non-executable local-model profiles are contribution-friendly:
